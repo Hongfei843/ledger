@@ -4,6 +4,7 @@ import SwiftData
 struct SettingsView: View {
     @Query private var txns: [Txn]
     @Query private var accounts: [Account]
+    @AppStorage(CategoryIcon.styleKey) private var iconStyle: String = IconStyle.emoji.rawValue
 
     private var liveTxns: [Txn] {
         txns.filter { $0.deletedAt == nil }
@@ -21,6 +22,11 @@ struct SettingsView: View {
                 }
 
                 Section("外观") {
+                    Picker("分类图标", selection: $iconStyle) {
+                        ForEach(IconStyle.allCases) { style in
+                            Text(style.displayName).tag(style.rawValue)
+                        }
+                    }
                     HStack {
                         Text("主题色")
                         Spacer()

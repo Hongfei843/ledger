@@ -16,7 +16,12 @@ struct EntrySheet: View {
     @State private var note = ""
 
     private var filteredAccounts: [Account] {
-        accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+        let base = accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+        // 收入不可能进信用卡/信用付/贷款：那本质是还款或退款，不是收入
+        if selectedType == .income {
+            return base.filter { !$0.type.isLiability }
+        }
+        return base
     }
 
     private var filteredCategories: [Category] {
@@ -64,6 +69,10 @@ struct EntrySheet: View {
         .padding(.top, Theme.Spacing.m)
         .onChange(of: selectedType) { _, _ in
             selectedCategoryId = filteredCategories.first?.id
+            if let current = selectedAccountId,
+               !filteredAccounts.contains(where: { $0.id == current }) {
+                selectedAccountId = filteredAccounts.first?.id
+            }
         }
     }
 
@@ -85,14 +94,14 @@ struct EntrySheet: View {
 
     private var categoryGrid: some View {
         ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Spacing.s), count: 5), spacing: Theme.Spacing.m) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: Theme.Spacing.s) {
                 ForEach(filteredCategories, id: \.id) { category in
                     categoryCell(category)
                 }
             }
-            .padding(.horizontal, Theme.Spacing.xl)
+            .padding(.horizontal, Theme.Spacing.l)
         }
-        .frame(maxHeight: 260)
+        .frame(maxHeight: 300)
     }
 
     private func categoryCell(_ category: Category) -> some View {
@@ -101,24 +110,16 @@ struct EntrySheet: View {
             selectedCategoryId = category.id
             Haptics.selection()
         } label: {
-            VStack(spacing: 4) {
-                Text(category.iconEmoji)
-                    .font(.system(size: 22))
-                    .frame(width: 46, height: 46)
-                    .background(
-                        selected
-                        ? Theme.accent.opacity(0.18)
-                        : Color(.secondarySystemBackground),
-                        in: Circle()
-                    )
+            VStack(spacing: 3) {
+                CategoryIconView(category: category, size: 40)
                     .overlay(
                         Circle().stroke(selected ? Theme.accent : Color.clear, lineWidth: 2)
                     )
                 Text(category.name)
-                    .font(.caption2)
+                    .font(.system(size: 10))
                     .foregroundStyle(selected ? Theme.accent : .secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.6)
             }
         }
         .buttonStyle(.plain)

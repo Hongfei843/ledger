@@ -104,6 +104,7 @@ struct TransactionListView: View {
                 .padding(.bottom, Theme.Spacing.xxl)
             }
             .navigationTitle("明细")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showEntry) {
                 EntrySheet()
                     .presentationDetents([.large])
@@ -112,27 +113,35 @@ struct TransactionListView: View {
     }
 
     private var monthSummaryCard: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            Text("本月支出")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(Money.format(monthExpense))
-                .font(.system(size: 40, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-            HStack(spacing: Theme.Spacing.xl) {
-                summaryItem(title: "收入", value: Money.format(monthIncome), color: Theme.income)
-                summaryItem(title: "结余", value: Money.format(monthIncome - monthExpense), color: .primary)
+        HStack(alignment: .lastTextBaseline, spacing: Theme.Spacing.l) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("本月支出")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(Money.format(monthExpense))
+                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
+            Spacer(minLength: Theme.Spacing.s)
+            summaryItem(title: "收入", value: Money.format(monthIncome), color: Theme.income)
+            summaryItem(title: "结余", value: Money.format(monthIncome - monthExpense), color: .primary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Theme.Spacing.l)
+        .padding(.horizontal, Theme.Spacing.l)
+        .padding(.vertical, Theme.Spacing.m)
         .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
     private func summaryItem(title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .trailing, spacing: 2) {
             Text(title).font(.caption2).foregroundStyle(.secondary)
-            Text(value).font(.subheadline.weight(.medium)).monospacedDigit().foregroundStyle(color)
+            Text(value)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
     }
 
@@ -191,10 +200,7 @@ struct TxnRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.m) {
-            Text(category?.iconEmoji ?? "📦")
-                .font(.system(size: 20))
-                .frame(width: 40, height: 40)
-                .background(Color(hexString: category?.colorHex ?? "5B7C99").opacity(0.12), in: Circle())
+            CategoryIconView(category: category, size: 40)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
