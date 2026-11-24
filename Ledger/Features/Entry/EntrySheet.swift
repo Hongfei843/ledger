@@ -1,5 +1,7 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
+import UIKit
 
 struct EntrySheet: View {
     @Environment(\.modelContext) private var context
@@ -19,6 +21,9 @@ struct EntrySheet: View {
     @State private var note = ""
     @State private var occurredAt = Date()
     @State private var isReimbursable = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var isRecognizing = false
+    @State private var ocrHint: String?
 
     /// 传入已有流水表示编辑模式
     private let editingTxn: Txn?
@@ -114,6 +119,20 @@ struct EntrySheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                        if isRecognizing {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "text.viewfinder")
+                        }
+                    }
+                    .accessibilityLabel("从截图识别")
+                }
+            }
+            .onChange(of: photoItem) { _, item in
+                guard let item else { return }
+                Task { await recognize(item) }
             }
             .onAppear(perform: prepareDefaults)
         }
@@ -154,6 +173,15 @@ struct EntrySheet: View {
         }
         .padding(.horizontal, Theme.Spacing.l)
         .padding(.vertical, Theme.Spacing.m)
+        .overlay(alignment: .bottomLeading) {
+            if let ocrHint {
+                Text(ocrHint)
+                    .font(.caption2)
+                    .foregroundStyle(Theme.warning)
+                    .padding(.leading, Theme.Spacing.l)
+                    .padding(.bottom, 2)
+            }
+        }
     }
 
     private var categoryGrid: some View {
@@ -382,6 +410,44 @@ struct EntrySheet: View {
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         BalanceService.refreshAll(accounts: accounts, transactions: all)
         try? context.save()
+    }
+
+    // MARK: - 截图识别
+
+    private func recognize(_ item: PhotosPickerItem) async {
+        isRecognizing = true
+        ocrHint = nil
+        defer {
+            isRecognizing = false
+            photoItem = nil
+        }
+
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: data) else {
+            ocrHint = "读取图片失败"
+            return
+        }
+
+        let lines: [OCRLine] = await withCheckedContinuation { continuation in
+            OCRService.recognize(image) { continuation.resume(returning: $0) }
+        }
+
+        let parsed = ScreenshotParser.parse(lines: lines)
+        if let amount = parsed.amountMinor {
+            amountText = Money.rawText(amount)
+        }
+        if let payee = parsed.payee, note.isEmpty {
+            note = payee
+        }
+
+        if parsed.amountMinor == nil {
+            ocrHint = "没识别出金额，请手动输入"
+        } else if parsed.confidence < 0.6 {
+            ocrHint = "识别置信度较低，请核对金额"
+        } else {
+            ocrHint = "已识别：\(Money.format(parsed.amountMinor ?? 0))"
+            Haptics.success()
+        }
     }
 }
 
