@@ -65,11 +65,15 @@ struct TransactionListView: View {
                         ForEach(groups) { group in
                             Section {
                                 ForEach(group.items, id: \.id) { txn in
-                                    TxnRow(
-                                        txn: txn,
-                                        category: category(for: txn),
-                                        accountName: accountName(for: txn)
-                                    )
+                                    NavigationLink {
+                                        TxnDetailView(txn: txn)
+                                    } label: {
+                                        TxnRow(
+                                            txn: txn,
+                                            category: category(for: txn),
+                                            accountName: accountName(for: txn)
+                                        )
+                                    }
                                 }
                                 .onDelete { offsets in
                                     delete(at: offsets, in: group)
@@ -171,6 +175,10 @@ struct TransactionListView: View {
             txn.deletedAt = Date()
             txn.updatedAt = Date()
         }
+        try? context.save()
+
+        let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
+        BalanceService.refreshAll(accounts: accounts, transactions: all)
         try? context.save()
         Haptics.warning()
     }

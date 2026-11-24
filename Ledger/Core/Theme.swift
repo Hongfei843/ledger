@@ -2,8 +2,18 @@ import SwiftUI
 
 /// 视觉 token：颜色、间距、圆角。所有视图只能引用这里的值。
 enum Theme {
-    // 强调色（可在设置里替换预设）
-    static let accent = Color(hex: 0x5B7C99)
+    /// 强调色存储键（UserDefaults / AppStorage 共用）
+    static let accentHexKey = "ui.accentHex"
+    static let defaultAccentHex = "5B7C99"
+
+    /// 当前强调色（跟随设置）
+    static var accentHex: String {
+        UserDefaults.standard.string(forKey: accentHexKey) ?? defaultAccentHex
+    }
+
+    static var accent: Color {
+        Color(hexString: accentHex)
+    }
 
     // 语义色
     static let income = Color(hex: 0x2E9E6B)

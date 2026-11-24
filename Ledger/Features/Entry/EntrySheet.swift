@@ -15,6 +15,18 @@ struct EntrySheet: View {
     @State private var selectedAccountId: UUID?
     @State private var note = ""
 
+    /// 传入已有流水表示编辑模式
+    private let editingTxn: Txn?
+
+    init(editingTxn: Txn? = nil) {
+        self.editingTxn = editingTxn
+        _amountText = State(initialValue: editingTxn.map { Money.rawText($0.amountMinor) } ?? "0")
+        _selectedType = State(initialValue: editingTxn?.type ?? .expense)
+        _selectedCategoryId = State(initialValue: editingTxn?.categoryId)
+        _selectedAccountId = State(initialValue: editingTxn?.accountId)
+        _note = State(initialValue: editingTxn?.note ?? "")
+    }
+
     private var filteredAccounts: [Account] {
         let base = accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
         // 收入不可能进信用卡/信用付/贷款：那本质是还款或退款，不是收入
@@ -46,7 +58,7 @@ struct EntrySheet: View {
                 bottomBar
             }
             .background(Theme.pageBackground)
-            .navigationTitle("记一笔")
+            .navigationTitle(editingTxn == nil ? "记一笔" : "编辑")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -228,28 +240,37 @@ struct EntrySheet: View {
     private func save() {
         guard let amount = Money.parse(amountText), amount > 0 else { return }
         guard let accountId = selectedAccountId ?? filteredAccounts.first?.id else { return }
-        let bookId = books.first?.id ?? UUID()
 
-        let txn = Txn(
-            bookId: bookId,
-            type: selectedType,
-            amountMinor: amount,
-            accountId: accountId,
-            categoryId: selectedCategoryId,
-            note: note.isEmpty ? nil : note
-        )
-        context.insert(txn)
-        try? context.save()
-
-        let descriptor = FetchDescriptor<Txn>()
-        let all = (try? context.fetch(descriptor)) ?? []
-        if let account = accounts.first(where: { $0.id == accountId }) {
-            BalanceService.refresh(account: account, transactions: all)
-            try? context.save()
+        if let txn = editingTxn {
+            txn.type = selectedType
+            txn.amountMinor = amount
+            txn.accountId = accountId
+            txn.categoryId = selectedCategoryId
+            txn.note = note.isEmpty ? nil : note
+            txn.updatedAt = Date()
+        } else {
+            let bookId = books.first?.id ?? UUID()
+            let txn = Txn(
+                bookId: bookId,
+                type: selectedType,
+                amountMinor: amount,
+                accountId: accountId,
+                categoryId: selectedCategoryId,
+                note: note.isEmpty ? nil : note
+            )
+            context.insert(txn)
         }
 
+        try? context.save()
+        refreshBalances()
         Haptics.success()
         dismiss()
+    }
+
+    private func refreshBalances() {
+        let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
+        BalanceService.refreshAll(accounts: accounts, transactions: all)
+        try? context.save()
     }
 }
 

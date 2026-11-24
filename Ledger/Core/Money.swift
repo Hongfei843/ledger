@@ -49,6 +49,17 @@ enum Money {
         return result
     }
 
+    /// 123456 -> "1234.56"（无符号、无千分位，用于输入框回填）
+    static func rawText(_ minor: Int64) -> String {
+        let negative = minor < 0
+        let magnitude = negative ? (minor == Int64.min ? Int64.max : -minor) : minor
+        let yuan = magnitude / 100
+        let cents = magnitude % 100
+        let centsText = cents < 10 ? "0\(cents)" : "\(cents)"
+        let text = "\(yuan).\(centsText)"
+        return negative ? "-" + text : text
+    }
+
     // MARK: - 解析
 
     /// "¥1,234.56" / "1234.56" / "1234" -> 123456

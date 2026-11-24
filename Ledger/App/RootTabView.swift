@@ -3,6 +3,7 @@ import SwiftData
 
 struct RootTabView: View {
     @Environment(\.modelContext) private var context
+    @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
 
     var body: some View {
         TabView {
@@ -21,6 +22,9 @@ struct RootTabView: View {
             SettingsView()
                 .tabItem { Label("我的", systemImage: "person") }
         }
+        .tint(Color(hexString: accentHex))
+        // 切换主题色时强制重建，让所有引用 Theme.accent 的视图立即生效
+        .id(accentHex)
         .task {
             SeedData.bootstrapIfNeeded(context: context)
         }

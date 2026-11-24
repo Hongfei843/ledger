@@ -37,9 +37,15 @@ enum BalanceService {
         account.updatedAt = Date()
     }
 
+    /// 刷新所有账户（增删改流水后调用）
+    static func refreshAll(accounts: [Account], transactions: [Txn]) {
+        for account in accounts where account.deletedAt == nil {
+            refresh(account: account, transactions: transactions)
+        }
+    }
+
     /// 净资产 = Σ 资产账户 + Σ 负债账户（负债为负）
-    static func netWorth(accounts: [Account], transactions: [Txn]) -> Int64 {
-        accounts
+    static func netWorth(accounts: [Account], transactions: [Txn]) -> Int64 {        accounts
             .filter { $0.deletedAt == nil && !$0.isArchived && $0.includeInNetWorth && $0.type != .loan }
             .reduce(Int64(0)) { partial, account in
                 partial + balance(of: account, transactions: transactions, openingBalanceMinor: account.openingBalanceMinor)
