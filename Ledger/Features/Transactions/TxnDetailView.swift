@@ -122,7 +122,7 @@ struct TxnDetailView: View {
 
                 Spacer()
 
-                Text(signPrefix + Money.format(txn.amountMinor))
+                Text(signPrefix + Money.format(abs(txn.amountMinor)))
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(txn.type == .income ? Theme.income : .primary)
@@ -145,7 +145,12 @@ struct TxnDetailView: View {
     }
 
     private var signPrefix: String {
-        txn.type == .income ? "+" : (txn.type == .expense ? "-" : "")
+        switch txn.type {
+        case .income: return "+"
+        case .expense: return "-"
+        case .adjustment: return txn.amountMinor >= 0 ? "+" : "-"
+        default: return ""
+        }
     }
 
     private var sourceText: String {

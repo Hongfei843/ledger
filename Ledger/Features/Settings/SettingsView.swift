@@ -4,8 +4,11 @@ import SwiftData
 struct SettingsView: View {
     @Query private var txns: [Txn]
     @Query private var accounts: [Account]
+    @Query private var loans: [Loan]
+    @Query private var scheduleItems: [LoanScheduleItem]
     @AppStorage(CategoryIcon.styleKey) private var iconStyle: String = IconStyle.emoji.rawValue
     @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
+    @AppStorage(NotificationService.enabledKey) private var remindersEnabled = false
 
     private var liveTxns: [Txn] {
         txns.filter { $0.deletedAt == nil }
@@ -25,6 +28,9 @@ struct SettingsView: View {
                 Section("数据") {
                     NavigationLink("账户管理") {
                         AccountsView()
+                    }
+                    NavigationLink("分类管理") {
+                        CategoryManageView()
                     }
                     NavigationLink("导入账单") {
                         ImportView()
@@ -51,6 +57,30 @@ struct SettingsView: View {
                             }
                         }
                     }
+                }
+
+                Section {
+                    Toggle("还款提醒", isOn: $remindersEnabled)
+                        .onChange(of: remindersEnabled) { _, enabled in
+                            Task {
+                                if enabled {
+                                    let granted = await NotificationService.requestAuthorization()
+                                    if !granted {
+                                        remindersEnabled = false
+                                        return
+                                    }
+                                }
+                                NotificationService.reschedule(
+                                    loans: loans,
+                                    items: scheduleItems,
+                                    accounts: accounts
+                                )
+                            }
+                        }
+                } header: {
+                    Text("提醒")
+                } footer: {
+                    Text("贷款到期前 3 天与当天、信用卡还款日前 3 天与当天各提醒一次。全部本地通知，不联网。")
                 }
 
                 Section("关于") {

@@ -202,6 +202,7 @@ struct TxnRow: View {
         switch txn.type {
         case .income: return "+"
         case .transfer: return ""
+        case .adjustment: return txn.amountMinor >= 0 ? "+" : "-"
         default: return "-"
         }
     }
@@ -222,7 +223,7 @@ struct TxnRow: View {
 
             Spacer()
 
-            Text(amountPrefix + Money.format(txn.amountMinor))
+            Text(amountPrefix + Money.format(abs(txn.amountMinor)))
                 .font(.subheadline.weight(.medium))
                 .monospacedDigit()
                 .foregroundStyle(amountColor)

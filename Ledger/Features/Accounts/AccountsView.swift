@@ -21,7 +21,11 @@ struct AccountsView: View {
         List {
             Section("资产") {
                 ForEach(activeAccounts.filter { !$0.type.isLiability }, id: \.id) { account in
-                    row(account)
+                    NavigationLink {
+                        AccountDetailView(account: account)
+                    } label: {
+                        row(account)
+                    }
                 }
             }
             Section("负债") {
@@ -31,7 +35,11 @@ struct AccountsView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(liabilities, id: \.id) { account in
-                        row(account)
+                        NavigationLink {
+                            AccountDetailView(account: account)
+                        } label: {
+                            row(account)
+                        }
                     }
                 }
             }
