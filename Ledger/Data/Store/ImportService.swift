@@ -81,6 +81,7 @@ enum ImportService {
                         iconEmoji: "💳",
                         sortOrder: 90
                     )
+                    created.bankId = BankPreset.match(name: name)?.id
                     context.insert(created)
                     accountIndex[name] = created
                     summary.accountsCreated += 1

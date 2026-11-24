@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 银行 / 平台预设。
 /// 不使用官方 Logo（商标风险，且上架审核敏感），
@@ -66,7 +67,7 @@ struct BankPreset: Identifiable, Hashable {
     }
 }
 
-/// 品牌标记：圆角方块 + 缩写
+/// 品牌标记：优先用内置 Logo 图片，没有则退回「品牌色 + 缩写」
 struct BankMarkView: View {
     let bankId: String?
     let fallbackEmoji: String
@@ -77,9 +78,24 @@ struct BankMarkView: View {
         BankPreset.find(bankId)
     }
 
+    private var logoImage: UIImage? {
+        guard let bankId else { return nil }
+        return UIImage(named: "bank_\(bankId)")
+    }
+
     var body: some View {
         Group {
-            if let preset {
+            if let logoImage {
+                ZStack {
+                    RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                        .fill(Color(hexString: preset?.colorHex ?? fallbackColorHex).opacity(0.10))
+                    Image(uiImage: logoImage)
+                        .resizable()
+                        .scaledToFit()
+                        .padding(size * 0.16)
+                }
+                .frame(width: size, height: size)
+            } else if let preset {
                 ZStack {
                     RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
                         .fill(Color(hexString: preset.colorHex))
