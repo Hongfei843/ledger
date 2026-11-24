@@ -41,6 +41,7 @@ struct StatsView: View {
                 VStack(spacing: Theme.Spacing.l) {
                     monthSwitcher
                     caliberPicker
+                    caliberHint
                     summaryCard
                     donutSection
                     rankSection
@@ -75,6 +76,34 @@ struct StatsView: View {
             }
         }
         .pickerStyle(.segmented)
+    }
+
+    private var caliberHint: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(caliberDescription)
+            if caliber == .personal && summary.pendingMinor == 0 && summary.expenseMinor > 0 {
+                Text("本月没有待报销记录，所以这个口径与「现金流」结果相同。")
+                    .foregroundStyle(.secondary)
+            }
+            if caliber == .personal && summary.pendingMinor > 0 {
+                Text("已剔除待报销 \(Money.format(summary.pendingMinor))")
+                    .foregroundStyle(Theme.warning)
+            }
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var caliberDescription: String {
+        switch caliber {
+        case .cashFlow:
+            return "所有收支都计入，反映账户里钱的实际进出。"
+        case .personal:
+            return "垫付中的报销不算你花的，报销到账也不算收入——看你自己真正花掉多少。"
+        case .advance:
+            return "只看标记为「可报销」的垫付与对应到账，用来核对报销。"
+        }
     }
 
     private var summaryCard: some View {
@@ -132,7 +161,7 @@ struct StatsView: View {
                     )
                     .foregroundStyle(Color(hexString: slice.colorHex))
                 }
-                .frame(height: 180)
+                .frame(height: 170)
                 .overlay {
                     VStack(spacing: 2) {
                         Text("合计").font(.caption2).foregroundStyle(.secondary)
@@ -141,6 +170,8 @@ struct StatsView: View {
                             .monospacedDigit()
                     }
                 }
+
+                legendGrid
             }
         }
         .padding(Theme.Spacing.l)
@@ -148,16 +179,53 @@ struct StatsView: View {
         .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
+    /// 环形图图例：颜色 + 分类名 + 占比
+    private var legendGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 6) {
+            ForEach(slices.prefix(8), id: \.id) { slice in
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(Color(hexString: slice.colorHex))
+                        .frame(width: 8, height: 8)
+                    Text(slice.name)
+                        .font(.caption2)
+                        .lineLimit(1)
+                    Spacer(minLength: 2)
+                    Text(String(format: "%.0f%%", percent(of: slice)))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+        }
+    }
+
+    private func percent(of slice: CategorySlice) -> Double {
+        guard totalExpense > 0 else { return 0 }
+        return Double(slice.amountMinor) / Double(totalExpense) * 100
+    }
+
     private var rankSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            Text("分类排行")
-                .font(.subheadline.weight(.semibold))
+            HStack {
+                Text("分类排行")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("点击查看明细")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
 
             if slices.isEmpty {
                 emptyHint
             } else {
                 ForEach(slices.prefix(10), id: \.id) { slice in
-                    rankRow(slice)
+                    NavigationLink {
+                        CategoryTxnListView(categoryId: slice.id, range: interval, title: slice.name)
+                    } label: {
+                        rankRow(slice)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }

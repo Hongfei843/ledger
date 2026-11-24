@@ -211,12 +211,13 @@ struct TxnRow: View {
             CategoryIconView(category: category, size: 40)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                Text(category?.name ?? txn.type.displayName)
                     .font(.subheadline)
                     .lineLimit(1)
-                Text(accountName)
+                Text(subtitle)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer()
@@ -229,9 +230,16 @@ struct TxnRow: View {
         .padding(.vertical, 2)
     }
 
-    private var title: String {
-        if let note = txn.note, !note.isEmpty { return note }
-        if let payee = txn.payee, !payee.isEmpty { return payee }
-        return category?.name ?? txn.type.displayName
+    /// 副标题：备注 · 账户（备注为空时只显示账户）
+    private var subtitle: String {
+        var parts: [String] = []
+        if let note = txn.note, !note.isEmpty {
+            parts.append(note)
+        }
+        if let payee = txn.payee, !payee.isEmpty {
+            parts.append(payee)
+        }
+        parts.append(accountName)
+        return parts.joined(separator: " · ")
     }
 }

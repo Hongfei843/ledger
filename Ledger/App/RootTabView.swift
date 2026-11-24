@@ -5,6 +5,9 @@ struct RootTabView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
 
+    /// 从系统「分享到本应用」或「用其他应用打开」传进来的文件
+    @State private var sharedFile: SharedFile?
+
     var body: some View {
         TabView {
             TransactionListView()
@@ -25,6 +28,14 @@ struct RootTabView: View {
         .tint(Color(hexString: accentHex))
         // 切换主题色时强制重建，让所有引用 Theme.accent 的视图立即生效
         .id(accentHex)
+        .onOpenURL { url in
+            sharedFile = SharedFile(url: url)
+        }
+        .sheet(item: $sharedFile) { file in
+            NavigationStack {
+                ImportView(initialFileURL: file.url)
+            }
+        }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
         }
@@ -46,4 +57,10 @@ struct PlaceholderTab: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.pageBackground)
     }
+}
+
+/// 分享进来的文件（Identifiable 以便用 sheet(item:) 呈现）
+struct SharedFile: Identifiable {
+    let id = UUID()
+    let url: URL
 }

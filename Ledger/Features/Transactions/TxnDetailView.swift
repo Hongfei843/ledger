@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// 流水详情：金额、分类、账户、备注，并列出同类别的其他记录。
+/// 流水详情：紧凑排版，一屏看到金额、账户、日期、备注，并列出同类别对比。
 struct TxnDetailView: View {
     let txn: Txn
 
@@ -36,33 +36,25 @@ struct TxnDetailView: View {
     }
 
     private var siblingTotal: Int64 {
-        siblings
-            .filter { $0.type == .expense }
-            .reduce(Int64(0)) { $0 + $1.amountMinor }
+        siblings.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
     }
 
     var body: some View {
         List {
             Section {
                 header
-                    .listRowBackground(Color.clear)
             }
 
-            Section("明细") {
-                detailRow(title: "类型", value: txn.type.displayName)
-                detailRow(title: "分类", value: category?.name ?? "未分类")
-                detailRow(title: "账户", value: account?.name ?? "—")
-                if let counter = counterAccount {
-                    detailRow(title: "对方账户", value: counter.name)
+            if let note = txn.note, !note.isEmpty {
+                Section("备注") {
+                    Text(note)
                 }
-                detailRow(title: "日期", value: DateFormatter.ledgerDateTime.string(from: txn.occurredAt))
-                if let note = txn.note, !note.isEmpty {
-                    detailRow(title: "备注", value: note)
+            }
+
+            if let payee = txn.payee, !payee.isEmpty {
+                Section("商家") {
+                    Text(payee)
                 }
-                if let payee = txn.payee, !payee.isEmpty {
-                    detailRow(title: "商家", value: payee)
-                }
-                detailRow(title: "来源", value: sourceText)
             }
 
             if !siblings.isEmpty {
@@ -81,7 +73,7 @@ struct TxnDetailView: View {
                         Text("共 \(Money.format(siblingTotal))")
                     }
                 } footer: {
-                    Text("展示该分类下最近的记录，方便对比金额是否异常。")
+                    Text("展示该分类下最近的记录，方便对比这笔是否异常。")
                 }
             }
 
@@ -92,6 +84,8 @@ struct TxnDetailView: View {
                     Text("删除这条记录")
                         .frame(maxWidth: .infinity)
                 }
+            } footer: {
+                Text(sourceText)
             }
         }
         .navigationTitle("记录详情")
@@ -111,23 +105,43 @@ struct TxnDetailView: View {
         }
     }
 
+    // MARK: - 头部：一行看完
+
     private var header: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.s) {
             HStack(spacing: Theme.Spacing.m) {
                 CategoryIconView(category: category, size: 44)
-                VStack(alignment: .leading, spacing: 2) {
+
+                VStack(alignment: .leading, spacing: 3) {
                     Text(category?.name ?? "未分类")
-                        .font(.subheadline)
+                        .font(.subheadline.weight(.medium))
+                    Text(accountLine)
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
-                    Text(signPrefix + Money.format(txn.amountMinor))
-                        .font(.system(size: 30, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(txn.type == .income ? Theme.income : .primary)
                 }
+
                 Spacer()
+
+                Text(signPrefix + Money.format(txn.amountMinor))
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(txn.type == .income ? Theme.income : .primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
             }
         }
         .padding(.vertical, Theme.Spacing.s)
+    }
+
+    /// 「储蓄卡 · 11月23日 21:37」，转账时补上对方账户
+    private var accountLine: String {
+        var parts: [String] = []
+        parts.append(account?.name ?? "—")
+        if let counterAccount {
+            parts.append("→ \(counterAccount.name)")
+        }
+        parts.append(DateFormatter.ledgerDateTime.string(from: txn.occurredAt))
+        return parts.joined(separator: " · ")
     }
 
     private var signPrefix: String {
@@ -136,23 +150,12 @@ struct TxnDetailView: View {
 
     private var sourceText: String {
         switch txn.source {
-        case .manual: return "手动记账"
-        case .imported: return "账单导入"
-        case .recurring: return "周期记账"
-        case .ocr: return "截图识别"
-        case .sync: return "同步"
+        case .manual: return "来源：手动记账"
+        case .imported: return "来源：账单导入"
+        case .recurring: return "来源：周期记账"
+        case .ocr: return "来源：截图识别"
+        case .sync: return "来源：同步"
         }
-    }
-
-    private func detailRow(title: String, value: String) -> some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .multilineTextAlignment(.trailing)
-        }
-        .font(.subheadline)
     }
 
     private func siblingRow(_ item: Txn) -> some View {
@@ -192,7 +195,7 @@ extension DateFormatter {
     static let ledgerDateTime: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        formatter.dateFormat = "M月d日 HH:mm"
         return formatter
     }()
 

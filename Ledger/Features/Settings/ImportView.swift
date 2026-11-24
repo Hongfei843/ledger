@@ -5,6 +5,7 @@ import UIKit
 
 struct ImportView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
     @Query private var accounts: [Account]
     @Query private var books: [Book]
 
@@ -15,6 +16,13 @@ struct ImportView: View {
     @State private var summary: ImportSummary?
     @State private var defaultAccountId: UUID?
     @State private var isWorking = false
+
+    /// 从系统分享面板 / 「用其他应用打开」传进来的文件
+    private let initialFileURL: URL?
+
+    init(initialFileURL: URL? = nil) {
+        self.initialFileURL = initialFileURL
+    }
 
     private var selectableAccounts: [Account] {
         accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
@@ -119,6 +127,13 @@ struct ImportView: View {
         }
         .navigationTitle("导入账单")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if initialFileURL != nil {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+        }
         .fileImporter(
             isPresented: $showPicker,
             // 放宽类型：微信/QQ 的文件常是动态类型（dyn.*），
@@ -144,6 +159,11 @@ struct ImportView: View {
                 defaultAccountId = selectableAccounts.first?.id
             }
         }
+        .task {
+            if let url = initialFileURL {
+                load(url: url)
+            }
+        }
     }
 
     private func dateText(_ date: Date?) -> String {
@@ -155,9 +175,18 @@ struct ImportView: View {
         errorMessage = nil
         do {
             guard let url = try result.get().first else { return }
-            let accessing = url.startAccessingSecurityScopedResource()
-            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+            load(url: url)
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
 
+    private func load(url: URL) {
+        errorMessage = nil
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+        do {
             let data = try Data(contentsOf: url)
             guard let text = decode(data) else {
                 errorMessage = "无法识别文件编码"
