@@ -57,6 +57,20 @@ jobs:
           chmod +x scripts/build-ipa.sh
           bash scripts/build-ipa.sh
 
+      # 只编译测试、不启动模拟器：能抓出单测里的编译错误，又不花几分钟开机。
+      - name: Compile tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild build-for-testing \
+            -project Ledger.xcodeproj \
+            -scheme Ledger \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build-tests \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
       - name: Verify artifact
         shell: bash
         run: |
