@@ -57,15 +57,17 @@ jobs:
           chmod +x scripts/build-ipa.sh
           bash scripts/build-ipa.sh
 
-      # 只编译测试、不启动模拟器：能抓出单测里的编译错误，又不花几分钟开机。
-      - name: Compile tests
+      # 真正跑一遍单测：金额与摊销算错比编译不过更可怕
+      - name: Run unit tests
         shell: bash
         run: |
           set -euo pipefail
-          xcodebuild build-for-testing \
+          DEVICE_ID=$(xcrun simctl list devices available | grep -m1 "iPhone" | sed -E 's/.*\(([0-9A-Fa-f-]{36})\).*/\1/')
+          echo "使用模拟器: $DEVICE_ID"
+          xcodebuild test \
             -project Ledger.xcodeproj \
             -scheme Ledger \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination "id=$DEVICE_ID" \
             -derivedDataPath build-tests \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
