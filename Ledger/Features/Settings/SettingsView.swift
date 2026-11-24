@@ -11,6 +11,14 @@ struct SettingsView: View {
         txns.filter { $0.deletedAt == nil }
     }
 
+    /// 从 Info.plist 读取真实版本，避免写死
+    private var appVersionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "\(version) (\(build))"
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -43,8 +51,7 @@ struct SettingsView: View {
                 }
 
                 Section("关于") {
-                    LabeledContent("版本", value: "1.0.0")
-                    LabeledContent("构建", value: "开发中")
+                    LabeledContent("版本", value: appVersionText)
                 }
             }
             .navigationTitle("我的")

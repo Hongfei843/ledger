@@ -39,6 +39,18 @@ fi
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
+# 版本号可由环境变量注入（CI 用构建序号），保证每次出包版本不同
+VERSION_ARGS=""
+if [ -n "${MARKETING_VERSION:-}" ]; then
+  VERSION_ARGS="$VERSION_ARGS MARKETING_VERSION=$MARKETING_VERSION"
+fi
+if [ -n "${CURRENT_PROJECT_VERSION:-}" ]; then
+  VERSION_ARGS="$VERSION_ARGS CURRENT_PROJECT_VERSION=$CURRENT_PROJECT_VERSION"
+fi
+if [ -n "$VERSION_ARGS" ]; then
+  echo "==> 版本参数:$VERSION_ARGS"
+fi
+
 # 注意：不加 -allowProvisioningUpdates，也不配 Development Team。
 xcodebuild \
   -project "$PROJECT" \
@@ -50,6 +62,7 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_IDENTITY="" \
+  $VERSION_ARGS \
   build
 
 APP_PATH="$BUILD_DIR/Build/Products/$CONFIG-iphoneos/$SCHEME.app"

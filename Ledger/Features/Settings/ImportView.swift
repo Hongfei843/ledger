@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import UIKit
 
 struct ImportView: View {
     @Environment(\.modelContext) private var context
@@ -46,6 +47,20 @@ struct ImportView: View {
                 }
             } footer: {
                 Text("支持 Cookie 记账导出的 CSV（含表头「时间,收支,一级分类…」）。按原始记录 ID 去重，重复导入不会产生重复账。")
+            }
+
+            Section {
+                Button {
+                    importFromClipboard()
+                } label: {
+                    HStack {
+                        Image(systemName: "doc.on.clipboard")
+                        Text("从剪贴板粘贴 CSV")
+                        Spacer()
+                    }
+                }
+            } footer: {
+                Text("如果文件选择器里点不动某个文件（微信/QQ 传来的文件常见），先用文本编辑器打开 CSV、全选复制，再点这里。")
             }
 
             if !records.isEmpty {
@@ -106,7 +121,9 @@ struct ImportView: View {
         .navigationBarTitleDisplayMode(.inline)
         .fileImporter(
             isPresented: $showPicker,
-            allowedContentTypes: [.commaSeparatedText, .plainText, .text],
+            // 放宽类型：微信/QQ 的文件常是动态类型（dyn.*），
+            // 只允许 .commaSeparatedText 会导致文件能看见但点不动。
+            allowedContentTypes: [.commaSeparatedText, .plainText, .text, .data, .item],
             allowsMultipleSelection: false
         ) { result in
             handlePick(result)
@@ -152,6 +169,22 @@ struct ImportView: View {
             if parsed.isEmpty {
                 errorMessage = "没有解析到任何记录"
             }
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    private func importFromClipboard() {
+        guard let text = UIPasteboard.general.string,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "剪贴板里没有文本"
+            return
+        }
+        do {
+            let parsed = try CookieCSVImporter.parse(text: text)
+            records = parsed
+            fileName = "剪贴板内容"
+            errorMessage = parsed.isEmpty ? "没有解析到任何记录" : nil
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
