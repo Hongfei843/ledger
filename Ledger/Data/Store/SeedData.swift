@@ -11,7 +11,7 @@ enum SeedData {
     }
 
     private static let versionKey = "seed.categories.version"
-    static let currentVersion = 2
+    static let currentVersion = 3
 
     static let expenseCategories: [CategorySeed] = [
         CategorySeed(name: "餐饮", emoji: "🍜", symbol: "fork.knife"),
@@ -19,7 +19,6 @@ enum SeedData {
         CategorySeed(name: "外卖", emoji: "🥡", symbol: "takeoutbag.and.cup.and.straw"),
         CategorySeed(name: "买菜", emoji: "🥬", symbol: "basket"),
         CategorySeed(name: "水果", emoji: "🍎", symbol: "leaf"),
-        CategorySeed(name: "零食", emoji: "🍰", symbol: "birthday.cake"),
         CategorySeed(name: "烟酒", emoji: "🍷", symbol: "wineglass"),
         CategorySeed(name: "交通", emoji: "🚇", symbol: "tram"),
         CategorySeed(name: "打车", emoji: "🚕", symbol: "car"),
@@ -85,8 +84,39 @@ enum SeedData {
         let storedVersion = UserDefaults.standard.integer(forKey: versionKey)
         guard storedVersion < currentVersion else { return }
         guard let book = books.first else { return }
+        // v3：把「零食」并入「餐饮」，已有流水一并迁移
+        if storedVersion < 3 {
+            mergeSnackIntoDining(context: context, bookId: book.id)
+        }
         topUpCategories(context: context, bookId: book.id)
         UserDefaults.standard.set(currentVersion, forKey: versionKey)
+    }
+
+    /// 专用迁移：零食 → 餐饮（保留已有记录，不丢数据）
+    private static func mergeSnackIntoDining(context: ModelContext, bookId: UUID) {
+        let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
+        guard let snack = categories.first(where: { $0.name == "零食" && $0.kind == .expense }) else {
+            return
+        }
+
+        let dining: Category
+        if let existing = categories.first(where: { $0.name == "餐饮" && $0.kind == .expense }) {
+            dining = existing
+        } else {
+            let created = Category(bookId: bookId, name: "餐饮", kind: .expense, iconEmoji: "🍜", sortOrder: 0)
+            context.insert(created)
+            dining = created
+        }
+
+        let txns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
+        for txn in txns where txn.categoryId == snack.id {
+            txn.categoryId = dining.id
+            txn.updatedAt = Date()
+        }
+
+        snack.isArchived = true
+        snack.updatedAt = Date()
+        try? context.save()
     }
 
     private static func createDefaultData(context: ModelContext) {

@@ -9,6 +9,7 @@ struct EntrySheet: View {
     @Query private var categories: [Category]
     @Query private var books: [Book]
     @Query private var claims: [Claim]
+    @Query private var allTxns: [Txn]
 
     @State private var amountText = "0"
     @State private var selectedType: TxnType = .expense
@@ -53,11 +54,27 @@ struct EntrySheet: View {
         baseAccounts.filter { $0.id != selectedAccountId }
     }
 
+    /// 每个分类的累计记账笔数，用于动态排序
+    private var usageCounts: [UUID: Int] {
+        var counts: [UUID: Int] = [:]
+        for txn in allTxns where txn.deletedAt == nil {
+            guard let categoryId = txn.categoryId else { continue }
+            counts[categoryId, default: 0] += 1
+        }
+        return counts
+    }
+
     private var filteredCategories: [Category] {
         let kind: CategoryKind = selectedType == .income ? .income : .expense
+        let counts = usageCounts
         return categories
             .filter { $0.deletedAt == nil && !$0.isArchived && $0.kind == kind }
-            .sorted { $0.sortOrder < $1.sortOrder }
+            .sorted { lhs, rhs in
+                let left = counts[lhs.id] ?? 0
+                let right = counts[rhs.id] ?? 0
+                if left != right { return left > right }
+                return lhs.sortOrder < rhs.sortOrder
+            }
     }
 
     private var amountMinor: Int64 {

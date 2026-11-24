@@ -237,10 +237,7 @@ struct StatsView: View {
     private func rankRow(_ slice: CategorySlice) -> some View {
         let ratio = totalExpense > 0 ? Double(slice.amountMinor) / Double(totalExpense) : 0
         return HStack(spacing: Theme.Spacing.m) {
-            Text(slice.emoji)
-                .font(.system(size: 16))
-                .frame(width: 28, height: 28)
-                .background(Color(hexString: slice.colorHex).opacity(0.12), in: Circle())
+            CategoryIconView(emoji: slice.emoji, name: slice.name, colorHex: slice.colorHex, size: 28)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {

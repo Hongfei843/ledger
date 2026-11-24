@@ -82,7 +82,7 @@ struct ClaimDetailView: View {
                 }
                 ForEach(byCategory) { item in
                     HStack {
-                        Text(item.emoji)
+                        CategoryIconView(emoji: item.emoji, name: item.name, colorHex: "5B7C99", size: 24)
                         Text(item.name)
                         Spacer()
                         Text(Money.format(item.amountMinor)).monospacedDigit()
