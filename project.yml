@@ -1,0 +1,79 @@
+name: Ledger
+
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+  groupSortPosition: top
+
+# 全局构建设置：目标是「别人（和 CI）拿到就能编译」，不追求花哨。
+settings:
+  base:
+    # 语言模式用 5.0：编译器仍是 Swift 6，但放宽严格并发检查。
+    # 目的：在没有 Xcode 的环境下降低首轮编译错误数量。
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+
+    IPHONEOS_DEPLOYMENT_TARGET: "18.0"
+    TARGETED_DEVICE_FAMILY: "1"
+
+    # 未签名构建：CI 与本地都不需要开发者账号。
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_IDENTITY: ""
+    DEVELOPMENT_TEAM: ""
+
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: NO
+    ENABLE_BITCODE: NO
+    ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
+
+targets:
+  Ledger:
+    type: application
+    platform: iOS
+    sources:
+      - path: Ledger
+        # Info.plist 只作为 INFOPLIST_FILE 使用，不能再被当作资源拷贝一次，
+        # 否则 Xcode 会报 "Multiple commands produce Info.plist"。
+        excludes:
+          - "Resources/Info.plist"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.ledger
+        PRODUCT_NAME: Ledger
+        INFOPLIST_FILE: Ledger/Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  LedgerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: LedgerTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.ledger.tests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Ledger
+
+schemes:
+  Ledger:
+    build:
+      targets:
+        Ledger: all
+        LedgerTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - LedgerTests
+    archive:
+      config: Release

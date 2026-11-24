@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Xcode / 构建产物
+build/
+dist/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+
+# XcodeGen 生成物（由 project.yml 现场生成）
+Ledger.xcodeproj/
+
+# 本地令牌与工具
+.gh/
+_tools/

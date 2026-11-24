@@ -1,0 +1,74 @@
+name: Build unsigned IPA
+
+# 用法：Actions 页面 → 左侧 "Build unsigned IPA" → Run workflow
+# 产物：该次运行页面底部 Artifacts → Ledger-unsigned-ipa（解压即 .ipa）
+# 说明：产出的是「未签名」IPA，需要你在本地用 Sideloadly / SideStore 重签后安装。
+#
+# 工程由 project.yml + XcodeGen 生成（不手写 .xcodeproj，避免格式错误）。
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          LATEST=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n 1 || true)
+          if [ -n "${LATEST:-}" ]; then
+            echo "使用 $LATEST"
+            sudo xcode-select -s "$LATEST"
+          fi
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos || true
+
+      - name: Install XcodeGen
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v xcodegen >/dev/null 2>&1; then
+            xcodegen --version
+          else
+            brew install xcodegen
+          fi
+
+      - name: Generate Xcode project
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec project.yml
+          ls -la
+          ls -la Ledger.xcodeproj || true
+
+      - name: Build unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-ipa.sh
+          bash scripts/build-ipa.sh
+
+      - name: Verify artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/Ledger-unsigned.ipa
+          ls -lh dist/Ledger-unsigned.ipa
+          unzip -l dist/Ledger-unsigned.ipa | head -40
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ledger-unsigned-ipa
+          path: dist/Ledger-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 90
