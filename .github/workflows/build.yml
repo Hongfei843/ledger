@@ -13,7 +13,9 @@ on:
 
 jobs:
   build:
-    runs-on: macos-26
+    # arm64（macos-26）经常因容量排队到超时被取消，改用 x64 的 macos-15 更稳。
+    # 部署目标 18.0、无 iOS 26 专有 API，Xcode 16 能正常构建。
+    runs-on: macos-15
     timeout-minutes: 40
 
     steps:
