@@ -4,6 +4,9 @@ import SwiftData
 struct RootTabView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
+    @AppStorage("onboarding.completed") private var onboardingCompleted = false
+
+    @State private var showOnboarding = false
 
     /// 从系统「分享到本应用」或「用其他应用打开」传进来的文件
     @State private var sharedFile: SharedFile?
@@ -36,8 +39,14 @@ struct RootTabView: View {
                 ImportView(initialFileURL: file.url)
             }
         }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView()
+        }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
+            if !onboardingCompleted {
+                showOnboarding = true
+            }
         }
     }
 }

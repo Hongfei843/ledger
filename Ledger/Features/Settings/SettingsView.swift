@@ -35,6 +35,9 @@ struct SettingsView: View {
                     NavigationLink("对账") {
                         ReconciliationView()
                     }
+                    NavigationLink("资产总览") {
+                        AssetOverviewView()
+                    }
                     NavigationLink("导入账单") {
                         ImportView()
                     }

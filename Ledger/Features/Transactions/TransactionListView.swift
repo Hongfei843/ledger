@@ -46,10 +46,37 @@ struct TransactionListView: View {
         }
     }
 
+    /// 超过 30 天没对账的账户
+    private var staleAccounts: [Account] {
+        let threshold = AppCalendar.gregorian.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        return accounts.filter {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && ($0.lastReconciledAt ?? .distantPast) < threshold
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
                 List {
+                    if !staleAccounts.isEmpty {
+                        Section {
+                            NavigationLink {
+                                ReconciliationView()
+                            } label: {
+                                HStack(spacing: Theme.Spacing.s) {
+                                    Image(systemName: "exclamationmark.circle")
+                                        .foregroundStyle(Theme.warning)
+                                    Text("有 \(staleAccounts.count) 个账户超过 30 天未对账")
+                                        .font(.subheadline)
+                                    Spacer()
+                                    Text("去对账")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+
                     Section {
                         monthSummaryCard
                             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
