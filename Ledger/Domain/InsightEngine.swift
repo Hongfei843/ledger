@@ -80,7 +80,7 @@ enum InsightEngine {
                   let count = categoryCount[categoryId], count >= 3,
                   let total = categoryAverage[categoryId] else { continue }
             let average = total / Int64(count)
-            guard average > 0, txn.amountMinor > average * 3, txn.amountMinor > 30_000 else { continue }
+            guard average > 0, txn.amountMinor >= average * 3, txn.amountMinor >= 30_000 else { continue }
             outliers.append((txn, Double(txn.amountMinor) / Double(average)))
         }
         outliers.sort { $0.txn.amountMinor > $1.txn.amountMinor }
