@@ -27,7 +27,7 @@ enum InsightEngine {
         let live = txns.filter { $0.deletedAt == nil }
         let calendar = AppCalendar.gregorian
         let thisStart = AppCalendar.startOfMonth(monthAnchor)
-        let nextStart = AppCalendar.startNextMonth(monthAnchor)
+        let nextStart = AppCalendar.startOfNextMonth(monthAnchor)
         let thisRange = DateInterval(start: thisStart, end: nextStart)
 
         guard let prevStart = calendar.date(byAdding: .month, value: -1, to: thisStart) else { return [] }
