@@ -41,6 +41,9 @@ struct SettingsView: View {
                     NavigationLink("周期记账") {
                         RecurringListView()
                     }
+                    NavigationLink("数据健康") {
+                        DataHealthView()
+                    }
                     NavigationLink("导入账单") {
                         ImportView()
                     }

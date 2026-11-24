@@ -17,11 +17,12 @@ struct AccountDetailView: View {
 
     @Query private var statements: [Statement]
 
-    private var currentStatement: Statement? {
-        let monthKey = AppCalendar.monthKey(Date())
-        return statements.first {
-            $0.accountId == account.id && $0.periodMonth == monthKey && $0.deletedAt == nil
-        }
+    /// 未结清的账单：跨月也算，否则上月没还的账单在详情里会「消失」
+    private var activeStatement: Statement? {
+        statements
+            .filter { $0.accountId == account.id && $0.deletedAt == nil && !$0.isSettled }
+            .sorted { $0.dueDate < $1.dueDate }
+            .first
     }
 
     private var liveTxns: [Txn] {
@@ -156,8 +157,9 @@ struct AccountDetailView: View {
                 LabeledContent("App 计算金额", value: Money.format(statementAmount))
             }
 
-            if let statement = currentStatement {
-                LabeledContent("银行账单金额", value: Money.format(statement.billAmountMinor))
+            if let statement = activeStatement {
+                LabeledContent("账单金额", value: Money.format(statement.billAmountMinor))
+                LabeledContent("账单月份", value: statement.periodMonth)
                 LabeledContent("已还", value: Money.format(statement.paidAmountMinor))
                 LabeledContent("状态", value: statement.status.displayName)
                 if statement.outstandingMinor > 0 {

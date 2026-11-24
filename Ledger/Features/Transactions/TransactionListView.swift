@@ -10,15 +10,17 @@ private struct DayGroup: Identifiable {
 
 struct TransactionListView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \Txn.occurredAt, order: .reverse) private var allTxns: [Txn]
+    @Query(
+        filter: #Predicate<Txn> { $0.deletedAt == nil },
+        sort: \Txn.occurredAt,
+        order: .reverse
+    ) private var allTxns: [Txn]
     @Query private var accounts: [Account]
     @Query private var categories: [Category]
 
     @State private var showEntry = false
 
-    private var activeTxns: [Txn] {
-        allTxns.filter { $0.deletedAt == nil }
-    }
+    private var activeTxns: [Txn] { allTxns }
 
     private var monthTxns: [Txn] {
         let interval = AppCalendar.monthInterval(containing: Date())
@@ -46,11 +48,17 @@ struct TransactionListView: View {
         }
     }
 
-    /// 超过 30 天没对账的账户
+    /// 超过 30 天没对账、且确实有钱进出的账户。
+    /// 只开户没流水的新账户不该一直挂红条。
     private var staleAccounts: [Account] {
         let threshold = AppCalendar.gregorian.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        let activeAccountIds = Set(
+            activeTxns.flatMap { [$0.accountId, $0.counterAccountId].compactMap { $0 } }
+        )
         return accounts.filter {
-            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && ($0.lastReconciledAt ?? .distantPast) < threshold
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem
+                && ($0.lastReconciledAt ?? .distantPast) < threshold
+                && (activeAccountIds.contains($0.id) || $0.openingBalanceMinor != 0)
         }
     }
 
@@ -80,6 +88,12 @@ struct TransactionListView: View {
                     Section {
                         monthSummaryCard
                             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                            .listRowBackground(Color.clear)
+                    }
+
+                    Section {
+                        accountStrip
+                            .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
                     }
 
@@ -141,6 +155,60 @@ struct TransactionListView: View {
                     .presentationDetents([.large])
             }
         }
+    }
+
+    /// 首页账户横滑卡片
+    private var cardAccounts: [Account] {
+        accounts
+            .filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private var accountStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Theme.Spacing.m) {
+                ForEach(cardAccounts, id: \.id) { account in
+                    NavigationLink {
+                        AccountDetailView(account: account)
+                    } label: {
+                        accountCard(account)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.l)
+            .padding(.vertical, 2)
+        }
+    }
+
+    private func accountCard(_ account: Account) -> some View {
+        let balance = BalanceService.balance(
+            of: account,
+            transactions: activeTxns,
+            openingBalanceMinor: account.openingBalanceMinor
+        )
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                BankMarkView(
+                    bankId: account.bankId,
+                    fallbackEmoji: account.iconEmoji,
+                    fallbackColorHex: account.colorHex,
+                    size: 22
+                )
+                Text(account.name)
+                    .font(.caption)
+                    .lineLimit(1)
+            }
+            Text(Money.format(balance))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(balance < 0 ? Theme.danger : .primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+        }
+        .frame(width: 132, alignment: .leading)
+        .padding(Theme.Spacing.m)
+        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var monthSummaryCard: some View {
