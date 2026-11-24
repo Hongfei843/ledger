@@ -55,6 +55,25 @@ enum NotificationService {
                 daysBefore: [3, 0]
             )
         }
+
+        scheduleMonthlyReconciliation()
+    }
+
+    /// 每月 1 号 20:00 提醒对账（重复触发）
+    private static func scheduleMonthlyReconciliation() {
+        var comps = DateComponents()
+        comps.day = 1
+        comps.hour = 20
+        comps.minute = 0
+
+        let content = UNMutableNotificationContent()
+        content.title = "该对账了"
+        content.body = "花两分钟核对各账户余额，账才不会越记越偏。"
+        content.sound = .default
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
+        let request = UNNotificationRequest(identifier: "reconcile-monthly", content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request)
     }
 
     private static func schedule(

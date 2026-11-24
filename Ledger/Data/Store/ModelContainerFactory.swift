@@ -10,6 +10,7 @@ enum ModelContainerFactory {
         Claim.self,
         Loan.self,
         LoanScheduleItem.self,
+        Statement.self,
         MerchantRule.self,
         CaptureRecord.self,
         RecurringRule.self

@@ -32,6 +32,9 @@ struct SettingsView: View {
                     NavigationLink("分类管理") {
                         CategoryManageView()
                     }
+                    NavigationLink("对账") {
+                        ReconciliationView()
+                    }
                     NavigationLink("导入账单") {
                         ImportView()
                     }

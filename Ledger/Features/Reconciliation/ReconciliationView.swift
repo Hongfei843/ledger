@@ -1,0 +1,188 @@
+import SwiftUI
+import SwiftData
+
+/// 对账页：一屏看到所有账户的「账面 vs 实际」，填完一起校准。
+/// 目的：把对账从「散落在各账户详情里」变成一个可完成的任务。
+struct ReconciliationView: View {
+    @Environment(\.modelContext) private var context
+    @Query private var accounts: [Account]
+    @Query private var allTxns: [Txn]
+
+    @State private var inputs: [UUID: String] = [:]
+    @State private var message: String?
+
+    private var liveAccounts: [Account] {
+        accounts
+            .filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private var liveTxns: [Txn] {
+        allTxns.filter { $0.deletedAt == nil }
+    }
+
+    private var assets: [Account] { liveAccounts.filter { !$0.type.isLiability } }
+    private var liabilities: [Account] { liveAccounts.filter { $0.type.isLiability } }
+
+    private var pendingCount: Int {
+        liveAccounts.filter { account in
+            guard let text = inputs[account.id] else { return false }
+            return Money.parse(text) != nil
+        }.count
+    }
+
+    private var staleCount: Int {
+        let threshold = AppCalendar.gregorian.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        return liveAccounts.filter { ($0.lastReconciledAt ?? .distantPast) < threshold }.count
+    }
+
+    var body: some View {
+        List {
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("未对账账户")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("\(staleCount) 个")
+                            .font(.headline)
+                            .foregroundStyle(staleCount > 0 ? Theme.warning : Theme.income)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("已填写")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("\(pendingCount) 个")
+                            .font(.headline)
+                    }
+                }
+            } footer: {
+                Text("超过 30 天没对账的账户会计入上方。填了实际余额才会参与校准。")
+            }
+
+            section(title: "资产", accounts: assets)
+            section(title: "负债", accounts: liabilities)
+
+            Section {
+                Button {
+                    applyAll()
+                } label: {
+                    Text("保存并校准（\(pendingCount) 个）")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(pendingCount == 0)
+
+                if let message {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(Theme.income)
+                }
+            }
+        }
+        .navigationTitle("对账")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func section(title: String, accounts: [Account]) -> some View {
+        Section(title) {
+            if accounts.isEmpty {
+                Text("暂无账户").foregroundStyle(.secondary)
+            }
+            ForEach(accounts, id: \.id) { account in
+                row(account)
+            }
+        }
+    }
+
+    private func row(_ account: Account) -> some View {
+        let current = BalanceService.balance(
+            of: account,
+            transactions: liveTxns,
+            openingBalanceMinor: account.openingBalanceMinor
+        )
+        let actual = inputs[account.id].flatMap { Money.parse($0) }
+        let delta = actual.map { $0 - current }
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(account.iconEmoji)
+                Text(account.name).font(.subheadline)
+                Spacer()
+                Text(Money.format(current))
+                    .font(.subheadline)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: Theme.Spacing.s) {
+                TextField("实际余额", text: binding(for: account.id))
+                    .keyboardType(.numbersAndPunctuation)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.subheadline)
+
+                if let delta {
+                    Text(delta == 0 ? "一致" : Money.format(delta, showSign: true))
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(delta == 0 ? Theme.income : Theme.warning)
+                        .frame(width: 90, alignment: .trailing)
+                }
+            }
+            Text(reconcileHint(account))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func reconcileHint(_ account: Account) -> String {
+        guard let last = account.lastReconciledAt else { return "从未对账" }
+        return "上次对账 \(DateFormatter.ledgerShort.string(from: last))"
+    }
+
+    private func binding(for id: UUID) -> Binding<String> {
+        Binding(
+            get: { inputs[id] ?? "" },
+            set: { inputs[id] = $0 }
+        )
+    }
+
+    private func applyAll() {
+        var adjusted = 0
+        let now = Date()
+
+        for account in liveAccounts {
+            guard let text = inputs[account.id], let actual = Money.parse(text) else { continue }
+            let current = BalanceService.balance(
+                of: account,
+                transactions: liveTxns,
+                openingBalanceMinor: account.openingBalanceMinor
+            )
+            let delta = actual - current
+            if delta != 0 {
+                let txn = Txn(
+                    bookId: account.bookId,
+                    type: .adjustment,
+                    amountMinor: delta,
+                    accountId: account.id,
+                    note: "对账校准"
+                )
+                context.insert(txn)
+                adjusted += 1
+            }
+            account.lastReconciledAt = now
+            account.updatedAt = now
+        }
+
+        try? context.save()
+
+        let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
+        let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        BalanceService.refreshAll(accounts: accounts, transactions: all)
+        try? context.save()
+
+        inputs = [:]
+        message = adjusted == 0 ? "账面与实际全部一致 👍" : "已校准 \(adjusted) 个账户"
+        Haptics.success()
+    }
+}

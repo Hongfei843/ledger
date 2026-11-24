@@ -10,7 +10,18 @@ struct AccountDetailView: View {
 
     @State private var actualBalanceText = ""
     @State private var showCreditEditor = false
+    @State private var showStatementEntry = false
+    @State private var repayingStatement: Statement?
     @State private var reconcileMessage: String?
+
+    @Query private var statements: [Statement]
+
+    private var currentStatement: Statement? {
+        let monthKey = AppCalendar.monthKey(Date())
+        return statements.first {
+            $0.accountId == account.id && $0.periodMonth == monthKey && $0.deletedAt == nil
+        }
+    }
 
     private var liveTxns: [Txn] {
         allTxns.filter { $0.deletedAt == nil && ($0.accountId == account.id || $0.counterAccountId == account.id) }
@@ -104,6 +115,14 @@ struct AccountDetailView: View {
             CreditCardSettingsSheet(account: account)
                 .presentationDetents([.medium])
         }
+        .sheet(isPresented: $showStatementEntry) {
+            StatementEntrySheet(account: account, suggestedAmount: statementAmount ?? 0)
+                .presentationDetents([.medium])
+        }
+        .sheet(item: $repayingStatement) { statement in
+            StatementRepaySheet(account: account, statement: statement)
+                .presentationDetents([.medium])
+        }
     }
 
     private var header: some View {
@@ -127,8 +146,20 @@ struct AccountDetailView: View {
     private var creditSection: some View {
         Section("本期账单") {
             if let statementAmount {
-                LabeledContent("账单金额", value: Money.format(statementAmount))
+                LabeledContent("App 计算金额", value: Money.format(statementAmount))
             }
+
+            if let statement = currentStatement {
+                LabeledContent("银行账单金额", value: Money.format(statement.billAmountMinor))
+                LabeledContent("已还", value: Money.format(statement.paidAmountMinor))
+                LabeledContent("状态", value: statement.status.displayName)
+                if statement.outstandingMinor > 0 {
+                    Button("记还款") { repayingStatement = statement }
+                }
+            } else {
+                Button("登记本期账单") { showStatementEntry = true }
+            }
+
             if let cycle, let due = cycle.dueDate(reference: Date()) {
                 LabeledContent("最后还款日", value: DateFormatter.ledgerShort.string(from: due))
                 if let days = cycle.daysUntilDue(reference: Date()) {
@@ -171,8 +202,7 @@ struct AccountDetailView: View {
     }
 }
 
-struct CreditCardSettingsSheet: View {
-    let account: Account
+struct CreditCardSettingsSheet: View {    let account: Account
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -219,6 +249,161 @@ struct CreditCardSettingsSheet: View {
         account.dueDay = dueDay
         account.updatedAt = Date()
         try? context.save()
+        Haptics.success()
+        dismiss()
+    }
+}
+
+// MARK: - 登记账单
+
+struct StatementEntrySheet: View {
+    let account: Account
+    let suggestedAmount: Int64
+
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var amountText = ""
+    @State private var minimumText = ""
+    @State private var dueDate = Date()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("账单金额（元）", text: $amountText)
+                        .keyboardType(.decimalPad)
+                    TextField("最低还款（元，可留空）", text: $minimumText)
+                        .keyboardType(.decimalPad)
+                    DatePicker("最后还款日", selection: $dueDate, displayedComponents: .date)
+                } footer: {
+                    Text("填银行 App 里显示的「本期应还」。App 自己算的金额仅供参考，两者不一致时以银行为准。")
+                }
+            }
+            .navigationTitle("登记本期账单")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") { save() }
+                        .disabled((Money.parse(amountText) ?? 0) <= 0)
+                }
+            }
+            .onAppear {
+                if amountText.isEmpty, suggestedAmount > 0 {
+                    amountText = Money.rawText(suggestedAmount)
+                }
+                if let billDay = account.billDay, let dueDay = account.dueDay {
+                    let cycle = CreditCardCycle(billDay: billDay, dueDay: dueDay)
+                    dueDate = cycle.dueDate(reference: Date()) ?? Date()
+                }
+            }
+        }
+    }
+
+    private func save() {
+        guard let amount = Money.parse(amountText) else { return }
+        let statement = Statement(
+            accountId: account.id,
+            periodMonth: AppCalendar.monthKey(Date()),
+            billAmountMinor: amount,
+            minimumPaymentMinor: Money.parse(minimumText) ?? 0,
+            dueDate: dueDate
+        )
+        statement.refreshStatus()
+        context.insert(statement)
+        try? context.save()
+        Haptics.success()
+        dismiss()
+    }
+}
+
+// MARK: - 还款核销
+
+struct StatementRepaySheet: View {
+    let account: Account
+    let statement: Statement
+
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @Query private var accounts: [Account]
+
+    @State private var amountText = ""
+    @State private var paymentAccountId: UUID?
+
+    private var paymentAccounts: [Account] {
+        accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && $0.id != account.id }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("还款金额") {
+                    TextField("0.00", text: $amountText)
+                        .keyboardType(.decimalPad)
+                    Text("本期待还 \(Money.format(statement.outstandingMinor))")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Section {
+                    Picker("付款账户", selection: $paymentAccountId) {
+                        Text("请选择").tag(UUID?.none)
+                        ForEach(paymentAccounts, id: \.id) { item in
+                            Text(item.name).tag(UUID?.some(item.id))
+                        }
+                    }
+                } header: {
+                    Text("从哪个账户还款")
+                } footer: {
+                    Text("会生成一笔「转账」：付款账户 → 信用卡。信用卡还款不算支出，不会影响你的消费统计。")
+                }
+            }
+            .navigationTitle("记还款")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("确认") { repay() }
+                        .disabled(paymentAccountId == nil || (Money.parse(amountText) ?? 0) <= 0)
+                }
+            }
+            .onAppear {
+                if amountText.isEmpty {
+                    amountText = Money.rawText(statement.outstandingMinor)
+                }
+                if paymentAccountId == nil {
+                    paymentAccountId = paymentAccounts.first?.id
+                }
+            }
+        }
+    }
+
+    private func repay() {
+        guard let accountId = paymentAccountId, let amount = Money.parse(amountText), amount > 0 else { return }
+
+        let transfer = Txn(
+            bookId: account.bookId,
+            type: .transfer,
+            amountMinor: amount,
+            accountId: accountId,
+            counterAccountId: account.id,
+            note: "信用卡还款 · \(account.name)"
+        )
+        context.insert(transfer)
+
+        statement.paidAmountMinor += amount
+        statement.refreshStatus()
+        try? context.save()
+
+        let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
+        let allAccounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        BalanceService.refreshAll(accounts: allAccounts, transactions: all)
+        try? context.save()
+
         Haptics.success()
         dismiss()
     }

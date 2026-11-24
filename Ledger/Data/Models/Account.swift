@@ -60,6 +60,8 @@ final class Account {
     var sortOrder: Int
     var includeInNetWorth: Bool
     var isArchived: Bool
+    /// 上次对账时间，用于提示「该对账了」
+    var lastReconciledAt: Date?
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
@@ -93,6 +95,7 @@ final class Account {
         self.sortOrder = sortOrder
         self.includeInNetWorth = true
         self.isArchived = false
+        self.lastReconciledAt = nil
         self.createdAt = Date()
         self.updatedAt = Date()
         self.deletedAt = nil
