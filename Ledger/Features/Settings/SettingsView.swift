@@ -18,6 +18,9 @@ struct SettingsView: View {
                     NavigationLink("账户管理") {
                         AccountsView()
                     }
+                    NavigationLink("导入账单") {
+                        ImportView()
+                    }
                     LabeledContent("流水条数", value: "\(liveTxns.count)")
                     LabeledContent("账户数", value: "\(accounts.filter { $0.deletedAt == nil }.count)")
                 }
