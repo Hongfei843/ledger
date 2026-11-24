@@ -65,6 +65,13 @@ struct ClaimListView: View {
             .navigationTitle("报销")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        ClaimReportView()
+                    } label: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { createClaim() } label: {
                         Image(systemName: "plus")

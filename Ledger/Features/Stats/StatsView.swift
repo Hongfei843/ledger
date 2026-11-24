@@ -43,6 +43,7 @@ struct StatsView: View {
                     caliberPicker
                     caliberHint
                     summaryCard
+                    insightSection
                     donutSection
                     rankSection
                     trendSection
@@ -143,6 +144,55 @@ struct StatsView: View {
                 .minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var insightSection: some View {
+        Group {
+            if !insights.isEmpty {
+                VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                    Text("洞察")
+                        .font(.subheadline.weight(.semibold))
+
+                    ForEach(insights) { insight in
+                        HStack(alignment: .top, spacing: Theme.Spacing.s) {
+                            Image(systemName: insight.symbol)
+                                .font(.system(size: 14))
+                                .foregroundStyle(insightColor(insight.level))
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(insight.title)
+                                    .font(.subheadline)
+                                Text(insight.detail)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 3)
+                    }
+                }
+                .padding(Theme.Spacing.l)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+            }
+        }
+    }
+
+    private var insights: [Insight] {
+        InsightEngine.generate(
+            monthAnchor: monthAnchor,
+            txns: liveTxns,
+            categories: categories,
+            claims: claims
+        )
+    }
+
+    private func insightColor(_ level: InsightLevel) -> Color {
+        switch level {
+        case .warning: return Theme.warning
+        case .positive: return Theme.income
+        case .info: return Theme.accent
+        }
     }
 
     private var donutSection: some View {
