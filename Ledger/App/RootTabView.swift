@@ -16,7 +16,7 @@ struct RootTabView: View {
             ClaimListView()
                 .tabItem { Label("报销", systemImage: "doc.text") }
 
-            PlaceholderTab(title: "负债", note: "第 3 批实现")
+            LoanListView()
                 .tabItem { Label("负债", systemImage: "creditcard") }
 
             SettingsView()
