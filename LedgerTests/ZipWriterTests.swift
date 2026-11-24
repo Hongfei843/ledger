@@ -19,11 +19,11 @@ final class ZipWriterTests: XCTestCase {
         let tail = [UInt8](data.suffix(22))
         XCTAssertEqual(Array(tail.prefix(4)), [0x50, 0x4B, 0x05, 0x06], "应以中央目录结束记录收尾")
 
-        // 结束记录里的条目数（偏移 10、12）应为 2
-        let count1 = UInt16(tail[10]) | (UInt16(tail[11]) << 8)
-        let count2 = UInt16(tail[12]) | (UInt16(tail[13]) << 8)
-        XCTAssertEqual(count1, 2)
-        XCTAssertEqual(count2, 2)
+        // 结束记录：偏移 8 = 本盘条目数，偏移 10 = 总条目数（各 2 字节）
+        let entriesOnDisk = UInt16(tail[8]) | (UInt16(tail[9]) << 8)
+        let totalEntries = UInt16(tail[10]) | (UInt16(tail[11]) << 8)
+        XCTAssertEqual(entriesOnDisk, 2)
+        XCTAssertEqual(totalEntries, 2)
     }
 
     func testUnicodeFileName() {
