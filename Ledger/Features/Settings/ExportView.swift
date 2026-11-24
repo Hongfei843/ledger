@@ -38,7 +38,7 @@ struct ExportView: View {
             return AppCalendar.monthInterval(containing: now)
         case .lastThreeMonths:
             let start = AppCalendar.gregorian.date(byAdding: .month, value: -2, to: AppCalendar.startOfMonth(now)) ?? now
-            return DateInterval(start: start, end: AppCalendar.startNextMonth(now))
+            return DateInterval(start: start, end: AppCalendar.startOfNextMonth(now))
         case .thisYear:
             let calendar = AppCalendar.gregorian
             let comps = calendar.dateComponents([.year], from: now)
