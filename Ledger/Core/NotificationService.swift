@@ -57,6 +57,57 @@ enum NotificationService {
         }
 
         scheduleMonthlyReconciliation()
+        scheduleBillIssuedReminders(accounts: accounts)
+        scheduleBackupReminder()
+    }
+
+    /// 账单日次日提醒登记账单
+    private static func scheduleBillIssuedReminders(accounts: [Account]) {
+        let calendar = AppCalendar.gregorian
+        for account in accounts where account.deletedAt == nil && account.type.isCreditLike {
+            guard let billDay = account.billDay, billDay >= 1 else { continue }
+            let cycle = CreditCardCycle(billDay: billDay, dueDay: account.dueDay ?? 20)
+            guard let bill = cycle.latestBillDate(reference: Date()) else { continue }
+
+            var fire = calendar.date(byAdding: .day, value: 1, to: bill) ?? bill
+            if fire <= Date() {
+                fire = calendar.date(byAdding: .month, value: 1, to: fire) ?? fire
+            }
+
+            let content = UNMutableNotificationContent()
+            content.title = "账单已出：\(account.name)"
+            content.body = "记得登记本期账单金额，再核对一下 App 算的对不对。"
+            content.sound = .default
+
+            let trigger = UNCalendarNotificationTrigger(
+                dateMatching: calendar.dateComponents([.year, .month, .day], from: fire).merging(
+                    DateComponents(hour: 9, minute: 0),
+                    uniquingKeysWith: { $1 }
+                ),
+                repeats: false
+            )
+            UNUserNotificationCenter.current().add(
+                UNNotificationRequest(identifier: "bill-\(account.id.uuidString)", content: content, trigger: trigger)
+            )
+        }
+    }
+
+    /// 每周日晚提醒导出备份
+    private static func scheduleBackupReminder() {
+        var comps = DateComponents()
+        comps.weekday = 1 // 周日
+        comps.hour = 20
+        comps.minute = 0
+
+        let content = UNMutableNotificationContent()
+        content.title = "该备份了"
+        content.body = "数据只在这台手机上，设置 → 导出分析包，存一份到文件 App。"
+        content.sound = .default
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: "backup-weekly", content: content, trigger: trigger)
+        )
     }
 
     /// 每月 1 号 20:00 提醒对账（重复触发）

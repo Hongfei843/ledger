@@ -19,25 +19,29 @@ struct TransactionListView: View {
     @Query private var categories: [Category]
 
     @State private var showEntry = false
+    @State private var period = PeriodRange()
+    @State private var showCustomRange = false
+    @State private var customStart = Date()
+    @State private var customEnd = Date()
 
     private var activeTxns: [Txn] { allTxns }
+    private var interval: DateInterval { period.interval() }
 
-    private var monthTxns: [Txn] {
-        let interval = AppCalendar.monthInterval(containing: Date())
-        return activeTxns.filter { interval.contains($0.occurredAt) }
+    private var periodTxns: [Txn] {
+        activeTxns.filter { interval.contains($0.occurredAt) }
     }
 
-    private var monthExpense: Int64 {
-        monthTxns.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+    private var periodExpense: Int64 {
+        periodTxns.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
     }
 
-    private var monthIncome: Int64 {
-        monthTxns.filter { $0.type == .income }.reduce(Int64(0)) { $0 + $1.amountMinor }
+    private var periodIncome: Int64 {
+        periodTxns.filter { $0.type == .income }.reduce(Int64(0)) { $0 + $1.amountMinor }
     }
 
     private var groups: [DayGroup] {
         var buckets: [Date: [Txn]] = [:]
-        for txn in activeTxns {
+        for txn in periodTxns {
             let key = AppCalendar.startOfDay(txn.occurredAt)
             buckets[key, default: []].append(txn)
         }
@@ -48,8 +52,7 @@ struct TransactionListView: View {
         }
     }
 
-    /// 超过 30 天没对账、且确实有钱进出的账户。
-    /// 只开户没流水的新账户不该一直挂红条。
+    /// 超过 30 天没对账、且确实有钱进出的账户
     private var staleAccounts: [Account] {
         let threshold = AppCalendar.gregorian.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         let activeAccountIds = Set(
@@ -86,8 +89,12 @@ struct TransactionListView: View {
                     }
 
                     Section {
+                        periodBar
+                            .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                            .listRowBackground(Color.clear)
+
                         monthSummaryCard
-                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
                             .listRowBackground(Color.clear)
                     }
 
@@ -150,10 +157,139 @@ struct TransactionListView: View {
             }
             .navigationTitle("明细")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        SearchView()
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                    }
+                }
+            }
             .sheet(isPresented: $showEntry) {
                 EntrySheet()
                     .presentationDetents([.large])
             }
+            .sheet(isPresented: $showCustomRange) {
+                customRangeSheet
+                    .presentationDetents([.height(300)])
+            }
+            .onAppear {
+                customStart = period.customStart ?? AppCalendar.startOfMonth(Date())
+                customEnd = period.customEnd ?? Date()
+            }
+        }
+    }
+
+    // MARK: - 周期切换
+
+    private var periodBar: some View {
+        HStack(spacing: Theme.Spacing.s) {
+            Button {
+                period = period.shifted(by: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .disabled(period.kind == .custom)
+
+            Spacer()
+
+            Menu {
+                ForEach(PeriodKind.allCases) { kind in
+                    Button(kind.displayName) {
+                        if kind == .custom {
+                            showCustomRange = true
+                        } else {
+                            period = PeriodRange(kind: kind, anchor: period.anchor)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(period.title())
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            Button {
+                period = period.shifted(by: 1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .disabled(period.kind == .custom)
+        }
+        .padding(.horizontal, Theme.Spacing.xs)
+    }
+
+    private var customRangeSheet: some View {
+        NavigationStack {
+            Form {
+                DatePicker("开始", selection: $customStart, displayedComponents: .date)
+                DatePicker("结束", selection: $customEnd, in: customStart..., displayedComponents: .date)
+            }
+            .navigationTitle("自定义区间")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { showCustomRange = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("确定") {
+                        period = PeriodRange(
+                            kind: .custom,
+                            anchor: customStart,
+                            customStart: customStart,
+                            customEnd: customEnd
+                        )
+                        showCustomRange = false
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - 汇总
+
+    private var monthSummaryCard: some View {
+        HStack(alignment: .lastTextBaseline, spacing: Theme.Spacing.l) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(period.kind.summaryLabel)支出")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(Money.format(periodExpense))
+                    .font(.system(size: 26, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            Spacer(minLength: Theme.Spacing.s)
+            summaryItem(title: "收入", value: Money.format(periodIncome), color: Theme.income)
+            summaryItem(title: "结余", value: Money.format(periodIncome - periodExpense), color: .primary)
+        }
+        .padding(.horizontal, Theme.Spacing.l)
+        .padding(.vertical, Theme.Spacing.m)
+        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+    }
+
+    private func summaryItem(title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
     }
 
@@ -211,44 +347,11 @@ struct TransactionListView: View {
         .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private var monthSummaryCard: some View {
-        HStack(alignment: .lastTextBaseline, spacing: Theme.Spacing.l) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("本月支出")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text(Money.format(monthExpense))
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            Spacer(minLength: Theme.Spacing.s)
-            summaryItem(title: "收入", value: Money.format(monthIncome), color: Theme.income)
-            summaryItem(title: "结余", value: Money.format(monthIncome - monthExpense), color: .primary)
-        }
-        .padding(.horizontal, Theme.Spacing.l)
-        .padding(.vertical, Theme.Spacing.m)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-    }
-
-    private func summaryItem(title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            Text(title).font(.caption2).foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-    }
-
     private var emptyState: some View {
         VStack(spacing: Theme.Spacing.m) {
-            Text("还没有记录")
+            Text("\(period.title())没有记录")
                 .font(.headline)
-            Text("点右下角的 + 记第一笔")
+            Text("点右下角的 + 记一笔")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -261,7 +364,7 @@ struct TransactionListView: View {
     }
 
     private func accountName(for txn: Txn) -> String {
-        accounts.first { $0.id == txn.accountId }?.name ?? "—"
+        accounts.first { $0.id == txn.accountId }?.displayName ?? "—"
     }
 
     private func delete(at offsets: IndexSet, in group: DayGroup) {
