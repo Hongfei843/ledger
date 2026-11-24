@@ -129,6 +129,9 @@ enum SeedData {
         let cash = Account(bookId: book.id, name: "现金", type: .cash, iconEmoji: "💵", sortOrder: 0)
         let debit = Account(bookId: book.id, name: "储蓄卡", type: .debit, iconEmoji: "🏦", sortOrder: 1)
         let credit = Account(bookId: book.id, name: "信用卡", type: .credit, iconEmoji: "💳", colorHex: "C98A9B", sortOrder: 2)
+        cash.bankId = "cash"
+        debit.bankId = "other"
+        credit.bankId = "other"
         context.insert(cash)
         context.insert(debit)
         context.insert(credit)

@@ -21,15 +21,16 @@ struct OnboardingView: View {
         let name: String
         let emoji: String
         let type: AccountType
+        let bankId: String
     }
 
     private let presets: [Preset] = [
-        Preset(id: "现金", name: "现金", emoji: "💵", type: .cash),
-        Preset(id: "储蓄卡", name: "储蓄卡", emoji: "🏦", type: .debit),
-        Preset(id: "信用卡", name: "信用卡", emoji: "💳", type: .credit),
-        Preset(id: "微信", name: "微信钱包", emoji: "💬", type: .ewallet),
-        Preset(id: "支付宝", name: "支付宝余额", emoji: "🅰️", type: .ewallet),
-        Preset(id: "花呗", name: "花呗", emoji: "🌸", type: .bnpl)
+        Preset(id: "现金", name: "现金", emoji: "💵", type: .cash, bankId: "cash"),
+        Preset(id: "储蓄卡", name: "储蓄卡", emoji: "🏦", type: .debit, bankId: "other"),
+        Preset(id: "信用卡", name: "信用卡", emoji: "💳", type: .credit, bankId: "other"),
+        Preset(id: "微信", name: "微信钱包", emoji: "💬", type: .ewallet, bankId: "wechat"),
+        Preset(id: "支付宝", name: "支付宝余额", emoji: "🅰️", type: .ewallet, bankId: "alipay"),
+        Preset(id: "花呗", name: "花呗", emoji: "🌸", type: .bnpl, bankId: "huabei")
     ]
 
     private var creditAccounts: [Account] {
@@ -222,6 +223,7 @@ struct OnboardingView: View {
                 iconEmoji: preset.emoji,
                 sortOrder: order
             )
+            account.bankId = preset.bankId
             context.insert(account)
             order += 1
         }

@@ -246,8 +246,13 @@ struct EntrySheet: View {
             Haptics.selection()
         } label: {
             HStack(spacing: 4) {
-                Text(account.iconEmoji).font(.system(size: 13))
-                Text(account.name).font(.caption)
+                BankMarkView(
+                    bankId: account.bankId,
+                    fallbackEmoji: account.iconEmoji,
+                    fallbackColorHex: account.colorHex,
+                    size: 18
+                )
+                Text(account.displayName).font(.caption)
                 if account.type.isLiability {
                     Text("负债").font(.system(size: 8)).foregroundStyle(.secondary)
                 }

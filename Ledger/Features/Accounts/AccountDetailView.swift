@@ -10,6 +10,7 @@ struct AccountDetailView: View {
 
     @State private var actualBalanceText = ""
     @State private var showCreditEditor = false
+    @State private var showEdit = false
     @State private var showStatementEntry = false
     @State private var repayingStatement: Statement?
     @State private var reconcileMessage: String?
@@ -105,11 +106,17 @@ struct AccountDetailView: View {
         .navigationTitle(account.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("编辑") { showEdit = true }
+            }
             if account.type.isCreditLike {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("账单设置") { showCreditEditor = true }
                 }
             }
+        }
+        .sheet(isPresented: $showEdit) {
+            AccountEditView(account: account)
         }
         .sheet(isPresented: $showCreditEditor) {
             CreditCardSettingsSheet(account: account)

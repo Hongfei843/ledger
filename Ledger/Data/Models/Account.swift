@@ -60,6 +60,10 @@ final class Account {
     var sortOrder: Int
     var includeInNetWorth: Bool
     var isArchived: Bool
+    /// 银行/平台预设 id（见 BankPreset）
+    var bankId: String?
+    /// 卡号后四位，用于区分同一家银行的多张卡
+    var cardTail: String?
     /// 上次对账时间，用于提示「该对账了」
     var lastReconciledAt: Date?
     var createdAt: Date
@@ -95,6 +99,8 @@ final class Account {
         self.sortOrder = sortOrder
         self.includeInNetWorth = true
         self.isArchived = false
+        self.bankId = nil
+        self.cardTail = nil
         self.lastReconciledAt = nil
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -104,6 +110,14 @@ final class Account {
     var type: AccountType {
         get { AccountType(rawValue: typeRaw) ?? .other }
         set { typeRaw = newValue.rawValue }
+    }
+
+    /// 展示名：名称 + 卡号后四位
+    var displayName: String {
+        if let tail = cardTail, !tail.isEmpty {
+            return "\(name) ••\(tail)"
+        }
+        return name
     }
 
     /// 信用卡欠款（正数表示欠多少）

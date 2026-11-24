@@ -1,0 +1,99 @@
+import SwiftUI
+
+/// 银行 / 平台预设。
+/// 不使用官方 Logo（商标风险，且上架审核敏感），
+/// 改用「品牌色 + 单字缩写」的品牌标记，识别度足够且无版权负担。
+struct BankPreset: Identifiable, Hashable {
+    let id: String
+    let name: String
+    /// 缩写，1–2 个汉字
+    let short: String
+    let colorHex: String
+    /// 品牌色很浅时需要深色文字
+    let darkText: Bool
+    /// 选中后推荐的账户类型
+    let suggestedType: AccountType
+
+    static let all: [BankPreset] = [
+        // 银行
+        BankPreset(id: "cmb", name: "招商银行", short: "招", colorHex: "C7000B", darkText: false, suggestedType: .debit),
+        BankPreset(id: "icbc", name: "工商银行", short: "工", colorHex: "E60012", darkText: false, suggestedType: .debit),
+        BankPreset(id: "ccb", name: "建设银行", short: "建", colorHex: "0066B3", darkText: false, suggestedType: .debit),
+        BankPreset(id: "abc", name: "农业银行", short: "农", colorHex: "009944", darkText: false, suggestedType: .debit),
+        BankPreset(id: "boc", name: "中国银行", short: "中", colorHex: "B01F24", darkText: false, suggestedType: .debit),
+        BankPreset(id: "bocom", name: "交通银行", short: "交", colorHex: "004A8F", darkText: false, suggestedType: .debit),
+        BankPreset(id: "psbc", name: "邮储银行", short: "邮", colorHex: "007A33", darkText: false, suggestedType: .debit),
+        BankPreset(id: "citic", name: "中信银行", short: "信", colorHex: "D80C24", darkText: false, suggestedType: .credit),
+        BankPreset(id: "spdb", name: "浦发银行", short: "浦", colorHex: "005BAC", darkText: false, suggestedType: .debit),
+        BankPreset(id: "cmbc", name: "民生银行", short: "民", colorHex: "009DD9", darkText: false, suggestedType: .debit),
+        BankPreset(id: "cib", name: "兴业银行", short: "兴", colorHex: "0057A8", darkText: false, suggestedType: .debit),
+        BankPreset(id: "ceb", name: "光大银行", short: "光", colorHex: "7A2E8E", darkText: false, suggestedType: .debit),
+        BankPreset(id: "hxb", name: "华夏银行", short: "华", colorHex: "C8102E", darkText: false, suggestedType: .debit),
+        BankPreset(id: "cgb", name: "广发银行", short: "广", colorHex: "E60012", darkText: false, suggestedType: .debit),
+        BankPreset(id: "pab", name: "平安银行", short: "平", colorHex: "F26F21", darkText: false, suggestedType: .debit),
+        BankPreset(id: "bosh", name: "上海银行", short: "沪", colorHex: "005BAC", darkText: false, suggestedType: .debit),
+        BankPreset(id: "bob", name: "北京银行", short: "京", colorHex: "C8102E", darkText: false, suggestedType: .debit),
+        BankPreset(id: "nbcb", name: "宁波银行", short: "宁", colorHex: "00A0E9", darkText: false, suggestedType: .debit),
+        BankPreset(id: "webank", name: "微众银行", short: "微", colorHex: "1677FF", darkText: false, suggestedType: .debit),
+        BankPreset(id: "mybank", name: "网商银行", short: "网", colorHex: "1677FF", darkText: false, suggestedType: .debit),
+
+        // 平台
+        BankPreset(id: "alipay", name: "支付宝", short: "支", colorHex: "1677FF", darkText: false, suggestedType: .ewallet),
+        BankPreset(id: "wechat", name: "微信", short: "微", colorHex: "07C160", darkText: false, suggestedType: .ewallet),
+        BankPreset(id: "unionpay", name: "云闪付", short: "云", colorHex: "E60012", darkText: false, suggestedType: .ewallet),
+        BankPreset(id: "huabei", name: "花呗", short: "花", colorHex: "1677FF", darkText: false, suggestedType: .bnpl),
+        BankPreset(id: "jiebei", name: "借呗", short: "借", colorHex: "1677FF", darkText: false, suggestedType: .bnpl),
+        BankPreset(id: "jdbt", name: "京东白条", short: "白", colorHex: "E1251B", darkText: false, suggestedType: .bnpl),
+        BankPreset(id: "douyin", name: "抖音月付", short: "抖", colorHex: "FE2C55", darkText: false, suggestedType: .bnpl),
+        BankPreset(id: "meituan", name: "美团月付", short: "美", colorHex: "FFD100", darkText: true, suggestedType: .bnpl),
+        BankPreset(id: "pdd", name: "拼多多", short: "拼", colorHex: "E02E24", darkText: false, suggestedType: .ewallet),
+        BankPreset(id: "didi", name: "滴滴", short: "滴", colorHex: "FF7F41", darkText: false, suggestedType: .ewallet),
+        BankPreset(id: "applepay", name: "Apple Pay", short: "", colorHex: "1C1C1E", darkText: false, suggestedType: .ewallet),
+
+        // 兜底
+        BankPreset(id: "cash", name: "现金", short: "现", colorHex: "34C759", darkText: false, suggestedType: .cash),
+        BankPreset(id: "other", name: "其他", short: "其", colorHex: "8E8E93", darkText: false, suggestedType: .other)
+    ]
+
+    static func find(_ id: String?) -> BankPreset? {
+        guard let id else { return nil }
+        return all.first { $0.id == id }
+    }
+
+    /// 根据名称反查（导入或旧数据用）
+    static func match(name: String) -> BankPreset? {
+        all.first { name.contains($0.name) }
+    }
+}
+
+/// 品牌标记：圆角方块 + 缩写
+struct BankMarkView: View {
+    let bankId: String?
+    let fallbackEmoji: String
+    let fallbackColorHex: String
+    var size: CGFloat = 40
+
+    private var preset: BankPreset? {
+        BankPreset.find(bankId)
+    }
+
+    var body: some View {
+        Group {
+            if let preset {
+                ZStack {
+                    RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                        .fill(Color(hexString: preset.colorHex))
+                    Text(preset.short)
+                        .font(.system(size: size * 0.42, weight: .bold))
+                        .foregroundStyle(preset.darkText ? Color.black : Color.white)
+                }
+                .frame(width: size, height: size)
+            } else {
+                Text(fallbackEmoji)
+                    .font(.system(size: size * 0.46))
+                    .frame(width: size, height: size)
+                    .background(Color(hexString: fallbackColorHex).opacity(0.12), in: Circle())
+            }
+        }
+    }
+}
