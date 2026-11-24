@@ -44,6 +44,8 @@ struct RootTabView: View {
         }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
+            // 补记周期交易（房租、订阅等），失败不影响启动
+            _ = RecurringService.run(context: context)
             if !onboardingCompleted {
                 showOnboarding = true
             }

@@ -38,6 +38,9 @@ struct SettingsView: View {
                     NavigationLink("资产总览") {
                         AssetOverviewView()
                     }
+                    NavigationLink("周期记账") {
+                        RecurringListView()
+                    }
                     NavigationLink("导入账单") {
                         ImportView()
                     }
