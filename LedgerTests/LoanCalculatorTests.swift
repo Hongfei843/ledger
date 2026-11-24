@@ -66,7 +66,8 @@ final class LoanCalculatorTests: XCTestCase {
         XCTAssertEqual(schedule[11].principalMinor, 10_000_00)
     }
 
-    /// IRR：借 12000 分 12 期每期 1080，实际年化应在 19%–20.5%
+    /// IRR：借 12000 分 12 期每期 1080，实际年化约 15.4%
+    /// 校验思路：总还款 12960，月利率约 1.2%，1.012^12 - 1 ≈ 15.4%
     func testEffectiveAnnualRate() {
         guard let annual = LoanCalculator.effectiveAnnualRate(
             principalMinor: 12_000_00,
@@ -75,8 +76,8 @@ final class LoanCalculatorTests: XCTestCase {
         ) else {
             return XCTFail("IRR 未收敛")
         }
-        XCTAssertGreaterThan(annual, 0.19)
-        XCTAssertLessThan(annual, 0.205)
+        XCTAssertGreaterThan(annual, 0.14)
+        XCTAssertLessThan(annual, 0.17)
     }
 
     /// 零利率不应崩溃
@@ -103,7 +104,10 @@ final class LoanCalculatorTests: XCTestCase {
             firstDueDate: firstDue
         )
         let remaining = Array(original.dropFirst(60))
-        let outstanding = remaining.reduce(Int64(0)) { $0 + $1.principalMinor }
+        let outstandingBefore = remaining.reduce(Int64(0)) { $0 + $1.principalMinor }
+        // 真实提前还款：先还掉 10 万本金
+        let prepay: Int64 = 10_000_000
+        let outstanding = outstandingBefore - prepay
 
         let updated = LoanCalculator.reschedule(
             outstandingMinor: outstanding,

@@ -299,6 +299,9 @@ enum LoanCalculator {
             )
         }
 
+        // 缩短期限：找「月供不超过原月供」的最短期限。
+        // 注意：月供随期数增加而下降，所以满足条件的是较大的期数区间，
+        // 必须取第一个满足的候选（最小的那个期数），否则相当于没缩期。
         var months = remainingMonths
         let payment = originalMonthlyPaymentMinor
         for candidate in 1...remainingMonths {
@@ -312,6 +315,7 @@ enum LoanCalculator {
             guard let first = trial.first else { continue }
             if first.totalMinor <= payment {
                 months = candidate
+                break
             }
         }
         months = max(1, months)
