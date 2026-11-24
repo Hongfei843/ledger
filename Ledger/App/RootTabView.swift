@@ -10,10 +10,10 @@ struct RootTabView: View {
             TransactionListView()
                 .tabItem { Label("明细", systemImage: "list.bullet") }
 
-            PlaceholderTab(title: "统计", note: "第 2 批实现")
+            StatsView()
                 .tabItem { Label("统计", systemImage: "chart.pie") }
 
-            PlaceholderTab(title: "报销", note: "第 2 批实现")
+            ClaimListView()
                 .tabItem { Label("报销", systemImage: "doc.text") }
 
             PlaceholderTab(title: "负债", note: "第 3 批实现")
