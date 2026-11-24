@@ -29,6 +29,9 @@ struct SettingsView: View {
                     NavigationLink("导入账单") {
                         ImportView()
                     }
+                    NavigationLink("导出分析包") {
+                        ExportView()
+                    }
                     LabeledContent("流水条数", value: "\(liveTxns.count)")
                     LabeledContent("账户数", value: "\(accounts.filter { $0.deletedAt == nil }.count)")
                 }
