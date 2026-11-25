@@ -19,6 +19,7 @@ struct EntrySheet: View {
     @State private var selectedAccountId: UUID?
     @State private var counterAccountId: UUID?
     @State private var note = ""
+    @State private var payee = ""
     @State private var occurredAt = Date()
     @State private var isReimbursable = false
     @State private var photoItem: PhotosPickerItem?
@@ -38,6 +39,7 @@ struct EntrySheet: View {
         _selectedAccountId = State(initialValue: editingTxn?.accountId)
         _counterAccountId = State(initialValue: editingTxn?.counterAccountId)
         _note = State(initialValue: editingTxn?.note ?? "")
+        _payee = State(initialValue: editingTxn?.payee ?? "")
         _occurredAt = State(initialValue: editingTxn?.occurredAt ?? Date())
         _isReimbursable = State(initialValue: editingTxn?.isReimbursable ?? false)
     }
@@ -167,10 +169,10 @@ struct EntrySheet: View {
     private var amountDisplay: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
             Text(Money.symbol)
-                .font(.system(size: 22, weight: .medium, design: .rounded))
+                .font(Theme.Fonts.amount(22, weight: .medium))
                 .foregroundStyle(.secondary)
             Text(amountText)
-                .font(.system(size: 40, weight: .semibold, design: .rounded))
+                .font(Theme.Fonts.amount(40))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
@@ -202,7 +204,7 @@ struct EntrySheet: View {
             }
             .padding(.horizontal, Theme.Spacing.l)
         }
-        .frame(maxHeight: 300)
+        .frame(maxHeight: 260)
     }
 
     private func sectionTitle(_ text: String) -> some View {
@@ -306,11 +308,20 @@ struct EntrySheet: View {
 
     private var optionsRow: some View {
         VStack(spacing: Theme.Spacing.s) {
-            HStack(spacing: Theme.Spacing.m) {
+            HStack(spacing: Theme.Spacing.s) {
+                quickDateChip("今天", daysAgo: 0)
+                quickDateChip("昨天", daysAgo: 1)
+                quickDateChip("前天", daysAgo: 2)
+                Spacer()
                 DatePicker("日期", selection: $occurredAt, displayedComponents: .date)
                     .font(.caption)
                     .labelsHidden()
-                Spacer()
+            }
+
+            HStack(spacing: Theme.Spacing.m) {
+                TextField("商家 / 对方（可选）", text: $payee)
+                    .font(.caption)
+                    .textFieldStyle(.roundedBorder)
                 if selectedType == .expense {
                     Toggle("可报销", isOn: $isReimbursable)
                         .font(.caption)
@@ -329,6 +340,28 @@ struct EntrySheet: View {
         }
         .padding(.horizontal, Theme.Spacing.l)
         .padding(.top, Theme.Spacing.s)
+    }
+
+    /// 快捷日期：今天 / 昨天 / 前天
+    private func quickDateChip(_ title: String, daysAgo: Int) -> some View {
+        let target = quickDate(daysAgo)
+        let selected = AppCalendar.startOfDay(for: occurredAt) == AppCalendar.startOfDay(for: target)
+        return Button {
+            occurredAt = target
+            Haptics.selection()
+        } label: {
+            Text(title)
+                .font(.caption2)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(selected ? Theme.accent.opacity(0.16) : Color(.secondarySystemBackground), in: Capsule())
+                .foregroundStyle(selected ? Theme.accent : .secondary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func quickDate(_ daysAgo: Int) -> Date {
+        AppCalendar.gregorian.date(byAdding: .day, value: -daysAgo, to: Date()) ?? Date()
     }
 
     private var bottomBar: some View {
@@ -356,7 +389,14 @@ struct EntrySheet: View {
 
     private func prepareDefaults() {
         if selectedAccountId == nil {
-            selectedAccountId = filteredAccounts.first?.id
+            // 优先复用上次用的账户，其次第一个
+            if let raw = UserDefaults.standard.string(forKey: Self.lastAccountKey),
+               let lastId = UUID(uuidString: raw),
+               filteredAccounts.contains(where: { $0.id == lastId }) {
+                selectedAccountId = lastId
+            } else {
+                selectedAccountId = filteredAccounts.first?.id
+            }
         }
         if selectedCategoryId == nil && selectedType != .transfer {
             // 优先复用上次记账用过的分类
@@ -374,6 +414,7 @@ struct EntrySheet: View {
     }
 
     private static let lastCategoryKey = "entry.lastCategoryId"
+    private static let lastAccountKey = "entry.lastAccountId"
 
     private func appendKey(_ key: String) {
         if key == "⌫" {
@@ -410,6 +451,7 @@ struct EntrySheet: View {
             txn.counterAccountId = selectedType == .transfer ? counterAccountId : nil
             txn.categoryId = selectedType == .transfer ? nil : selectedCategoryId
             txn.note = note.isEmpty ? nil : note
+            txn.payee = payee.isEmpty ? nil : payee
             txn.occurredAt = occurredAt
             applyReimbursable(to: txn, bookId: bookId)
             txn.updatedAt = Date()
@@ -422,6 +464,7 @@ struct EntrySheet: View {
                 occurredAt: occurredAt,
                 categoryId: selectedType == .transfer ? nil : selectedCategoryId,
                 counterAccountId: selectedType == .transfer ? counterAccountId : nil,
+                payee: payee.isEmpty ? nil : payee,
                 note: note.isEmpty ? nil : note
             )
             context.insert(txn)
@@ -435,6 +478,7 @@ struct EntrySheet: View {
         if let categoryId = selectedCategoryId {
             UserDefaults.standard.set(categoryId.uuidString, forKey: Self.lastCategoryKey)
         }
+        UserDefaults.standard.set(accountId.uuidString, forKey: Self.lastAccountKey)
 
         let categoryName = filteredCategories.first { $0.id == selectedCategoryId }?.name ?? "已记录"
         onSaved?("\(categoryName) \(Money.format(amountMinor))")
@@ -497,8 +541,8 @@ struct EntrySheet: View {
         if let amount = parsed.amountMinor {
             amountText = Money.rawText(amount)
         }
-        if let payee = parsed.payee, note.isEmpty {
-            note = payee
+        if let parsedPayee = parsed.payee, payee.isEmpty {
+            payee = parsedPayee
         }
 
         if parsed.amountMinor == nil {
@@ -532,7 +576,7 @@ struct NumberPad: View {
                             onKey(key)
                         } label: {
                             Text(key)
-                                .font(.system(size: 22, weight: .medium, design: .rounded))
+                                .font(Theme.Fonts.amount(22, weight: .medium))
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 48)
                                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))

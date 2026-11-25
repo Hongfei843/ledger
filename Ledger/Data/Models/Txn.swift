@@ -47,6 +47,8 @@ final class Txn {
     var note: String?
     var isReimbursable: Bool
     var claimId: UUID?
+    /// 退款对应的原支出流水 id（退款流水本身是 income）
+    var refundOfTxnId: UUID?
     var loanId: UUID?
     var loanScheduleItemId: UUID?
     var principalMinor: Int64?
@@ -82,6 +84,7 @@ final class Txn {
         self.note = note
         self.isReimbursable = false
         self.claimId = nil
+        self.refundOfTxnId = nil
         self.loanId = nil
         self.loanScheduleItemId = nil
         self.principalMinor = nil
@@ -105,6 +108,9 @@ final class Txn {
     }
 
     var isDeleted: Bool { deletedAt != nil }
+
+    /// 是否是某笔支出的退款（统计里作为支出冲减，不算收入）
+    var isRefund: Bool { type == .income && refundOfTxnId != nil }
 
     /// 对账户余额的增量（资产正、负债负）
     var balanceDelta: Int64 {

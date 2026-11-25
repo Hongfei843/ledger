@@ -76,7 +76,8 @@ enum StatsEngine {
     }
 
     static func includesIncome(_ txn: Txn, caliber: StatsCaliber) -> Bool {
-        guard txn.type == .income else { return false }
+        // 退款不算收入：它是原支出的冲减
+        guard txn.type == .income, !RefundService.isRefund(txn) else { return false }
         switch caliber {
         case .cashFlow:
             return true
@@ -97,6 +98,7 @@ enum StatsEngine {
         let open = openClaimIds(claims: claims)
         var income: Int64 = 0
         var expense: Int64 = 0
+        var refunded: Int64 = 0
         var pending: Int64 = 0
 
         for txn in txns where txn.deletedAt == nil && range.contains(txn.occurredAt) {
@@ -106,10 +108,18 @@ enum StatsEngine {
             if includesExpense(txn, caliber: caliber, openClaims: open) {
                 expense += txn.amountMinor
             }
+            if RefundService.isRefund(txn) {
+                refunded += txn.amountMinor
+            }
             if txn.type == .expense, txn.isReimbursable,
                let claimId = txn.claimId, open.contains(claimId) {
                 pending += txn.amountMinor
             }
+        }
+
+        // 退款冲减支出（垫付口径只核对垫付与到账，不做冲减）
+        if caliber != .advance {
+            expense = RefundService.netExpense(expenseMinor: expense, refundMinor: refunded)
         }
 
         return StatsSummary(incomeMinor: income, expenseMinor: expense, pendingMinor: pending)
@@ -138,9 +148,20 @@ enum StatsEngine {
             }
         }
 
+        // 退款冲减原分类（退款流水继承了原支出的分类），垫付口径不冲减
+        if caliber != .advance {
+            for txn in txns where txn.deletedAt == nil && range.contains(txn.occurredAt) && RefundService.isRefund(txn) {
+                if let categoryId = txn.categoryId, let current = totals[categoryId] {
+                    totals[categoryId] = (current.amount - txn.amountMinor, current.count)
+                } else {
+                    unknownAmount -= txn.amountMinor
+                }
+            }
+        }
+
         var slices: [CategorySlice] = []
         for (categoryId, value) in totals {
-            guard let category = categories.first(where: { $0.id == categoryId }) else { continue }
+            guard value.amount > 0, let category = categories.first(where: { $0.id == categoryId }) else { continue }
             slices.append(
                 CategorySlice(
                     id: categoryId,
@@ -153,7 +174,7 @@ enum StatsEngine {
             )
         }
 
-        if unknownCount > 0 {
+        if unknownCount > 0, unknownAmount > 0 {
             slices.append(
                 CategorySlice(
                     id: uncategorizedId,
@@ -169,7 +190,7 @@ enum StatsEngine {
         return slices.sorted { $0.amountMinor > $1.amountMinor }
     }
 
-    /// 最近 N 个月的收支（用于趋势图）
+    /// 最近 N 个月的收支（用于趋势图）；退款同样冲减支出、不计收入
     static func byMonth(months: Int, endingAt: Date, txns: [Txn]) -> [MonthBucket] {
         guard months > 0 else { return [] }
         var buckets: [MonthBucket] = []
@@ -181,11 +202,14 @@ enum StatsEngine {
             let interval = AppCalendar.monthInterval(containing: monthStart)
             var income: Int64 = 0
             var expense: Int64 = 0
+            var refunded: Int64 = 0
 
             for txn in txns where txn.deletedAt == nil && interval.contains(txn.occurredAt) {
-                if txn.type == .income { income += txn.amountMinor }
+                if txn.type == .income && !RefundService.isRefund(txn) { income += txn.amountMinor }
                 if txn.type == .expense { expense += txn.amountMinor }
+                if RefundService.isRefund(txn) { refunded += txn.amountMinor }
             }
+            expense = RefundService.netExpense(expenseMinor: expense, refundMinor: refunded)
 
             buckets.append(
                 MonthBucket(

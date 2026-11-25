@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// 流水详情：紧凑排版，一屏看到金额、账户、日期、备注，并列出同类别对比。
+/// 流水详情：金额、账户、日期、备注，退款关系与同类别对比。
 struct TxnDetailView: View {
     let txn: Txn
 
@@ -13,6 +13,7 @@ struct TxnDetailView: View {
     @Query private var accounts: [Account]
 
     @State private var showEdit = false
+    @State private var showRefund = false
     @State private var showDeleteConfirm = false
 
     private var category: Category? {
@@ -27,10 +28,32 @@ struct TxnDetailView: View {
         accounts.first { $0.id == txn.counterAccountId }
     }
 
+    private var refunds: [Txn] {
+        RefundService.refunds(of: txn, all: allTxns)
+    }
+
+    private var refundedMinor: Int64 {
+        RefundService.refundedMinor(of: txn, all: allTxns)
+    }
+
+    private var remainingRefundableMinor: Int64 {
+        RefundService.remainingRefundableMinor(of: txn, all: allTxns)
+    }
+
+    private var originalTxn: Txn? {
+        guard let id = txn.refundOfTxnId else { return nil }
+        return allTxns.first { $0.id == id && $0.deletedAt == nil }
+    }
+
     private var siblings: [Txn] {
         guard let categoryId = txn.categoryId else { return [] }
         return allTxns
-            .filter { $0.deletedAt == nil && $0.categoryId == categoryId && $0.id != txn.id }
+            .filter {
+                $0.deletedAt == nil
+                    && $0.categoryId == categoryId
+                    && $0.id != txn.id
+                    && !RefundService.isRefund($0)
+            }
             .prefix(10)
             .map { $0 }
     }
@@ -39,10 +62,26 @@ struct TxnDetailView: View {
         siblings.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
     }
 
+    private var deletePrompt: String {
+        refunds.isEmpty ? "确定删除这条记录？" : "删除这笔支出和 \(refunds.count) 笔关联退款？"
+    }
+
     var body: some View {
         List {
             Section {
                 header
+            }
+
+            if let originalTxn {
+                refundSourceSection(originalTxn)
+            }
+
+            if txn.type == .expense {
+                refundActionSection
+            }
+
+            if !refunds.isEmpty {
+                refundListSection
             }
 
             if let note = txn.note, !note.isEmpty {
@@ -58,23 +97,7 @@ struct TxnDetailView: View {
             }
 
             if !siblings.isEmpty {
-                Section {
-                    ForEach(siblings, id: \.id) { item in
-                        NavigationLink {
-                            TxnDetailView(txn: item)
-                        } label: {
-                            siblingRow(item)
-                        }
-                    }
-                } header: {
-                    HStack {
-                        Text("同类别的其他记录")
-                        Spacer()
-                        Text("共 \(Money.format(siblingTotal))")
-                    }
-                } footer: {
-                    Text("展示该分类下最近的记录，方便对比这笔是否异常。")
-                }
+                siblingsSection
             }
 
             Section {
@@ -99,7 +122,11 @@ struct TxnDetailView: View {
             EntrySheet(editingTxn: txn)
                 .presentationDetents([.large])
         }
-        .confirmationDialog("确定删除这条记录？", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+        .sheet(isPresented: $showRefund) {
+            RefundSheet(original: txn, alreadyRefundedMinor: refundedMinor)
+                .presentationDetents([.medium, .large])
+        }
+        .confirmationDialog(deletePrompt, isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("删除", role: .destructive) { deleteTxn() }
             Button("取消", role: .cancel) {}
         }
@@ -113,8 +140,18 @@ struct TxnDetailView: View {
                 CategoryIconView(category: category, size: 44)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(category?.name ?? "未分类")
-                        .font(.subheadline.weight(.medium))
+                    HStack(spacing: 6) {
+                        Text(category?.name ?? "未分类")
+                            .font(.subheadline.weight(.medium))
+                        if txn.isRefund {
+                            Text("退款")
+                                .font(.system(size: 9, weight: .semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Theme.income.opacity(0.14), in: Capsule())
+                                .foregroundStyle(Theme.income)
+                        }
+                    }
                     Text(accountLine)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -123,11 +160,23 @@ struct TxnDetailView: View {
                 Spacer()
 
                 Text(signPrefix + Money.format(abs(txn.amountMinor)))
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .font(Theme.Fonts.amountL)
                     .monospacedDigit()
                     .foregroundStyle(txn.type == .income ? Theme.income : .primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
+            }
+
+            if refundedMinor > 0 {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.uturn.backward.circle.fill")
+                    Text("已退款 \(Money.format(refundedMinor))")
+                    if remainingRefundableMinor > 0 {
+                        Text("· 剩余可退 \(Money.format(remainingRefundableMinor))")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(Theme.income)
             }
         }
         .padding(.vertical, Theme.Spacing.s)
@@ -163,6 +212,128 @@ struct TxnDetailView: View {
         }
     }
 
+    // MARK: - 退款
+
+    private func refundSourceSection(_ original: Txn) -> some View {
+        Section {
+            NavigationLink {
+                TxnDetailView(txn: original)
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("原支出")
+                            .font(.subheadline)
+                        Text(DateFormatter.ledgerDateTime.string(from: original.occurredAt))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(Money.format(original.amountMinor))
+                        .font(Theme.Fonts.amountM)
+                        .monospacedDigit()
+                }
+            }
+        } header: {
+            Text("关联支出")
+        } footer: {
+            Text("这笔退款已从原支出里冲减，不会重复计入收入。")
+        }
+    }
+
+    private var refundActionSection: some View {
+        Section {
+            if refundedMinor > 0 {
+                HStack {
+                    Text("已退款")
+                    Spacer()
+                    Text(Money.format(refundedMinor))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.income)
+                }
+                HStack {
+                    Text("可退剩余")
+                    Spacer()
+                    Text(Money.format(remainingRefundableMinor))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if remainingRefundableMinor > 0 {
+                Button {
+                    showRefund = true
+                } label: {
+                    Label("记一笔退款", systemImage: "arrow.uturn.backward.circle")
+                }
+            }
+        } header: {
+            Text("退款")
+        } footer: {
+            if refundedMinor > 0 {
+                Text("退款流水在下方「退款记录」里，可以点进去查看或删除。")
+            } else {
+                Text("退款会冲减这笔支出：统计里不算收入，原分类金额直接减少。")
+            }
+        }
+    }
+
+    private var refundListSection: some View {
+        Section {
+            ForEach(refunds, id: \.id) { item in
+                NavigationLink {
+                    TxnDetailView(txn: item)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(refundTitle(item))
+                                .font(.subheadline)
+                            Text(DateFormatter.ledgerDateTime.string(from: item.occurredAt))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text("+" + Money.format(item.amountMinor))
+                            .font(Theme.Fonts.amountM)
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.income)
+                    }
+                }
+            }
+        } header: {
+            HStack {
+                Text("退款记录")
+                Spacer()
+                Text("共 \(refunds.count) 笔")
+            }
+        }
+    }
+
+    private func refundTitle(_ item: Txn) -> String {
+        if let note = item.note, !note.isEmpty { return note }
+        return "退款"
+    }
+
+    // MARK: - 同类对比
+
+    private var siblingsSection: some View {
+        Section {
+            ForEach(siblings, id: \.id) { item in
+                NavigationLink {
+                    TxnDetailView(txn: item)
+                } label: {
+                    siblingRow(item)
+                }
+            }
+        } header: {
+            HStack {
+                Text("同类别的其他记录")
+                Spacer()
+                Text("共 \(Money.format(siblingTotal))")
+            }
+        } footer: {
+            Text("展示该分类下最近的记录，方便对比这笔是否异常。")
+        }
+    }
+
     private func siblingRow(_ item: Txn) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -177,14 +348,20 @@ struct TxnDetailView: View {
             }
             Spacer()
             Text(Money.format(item.amountMinor))
-                .font(.subheadline)
+                .font(Theme.Fonts.amountM)
                 .monospacedDigit()
         }
     }
 
     private func deleteTxn() {
-        txn.deletedAt = Date()
-        txn.updatedAt = Date()
+        var victims: [Txn] = [txn]
+        if txn.type == .expense {
+            victims.append(contentsOf: refunds)
+        }
+        for item in victims {
+            item.deletedAt = Date()
+            item.updatedAt = Date()
+        }
         try? context.save()
 
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []

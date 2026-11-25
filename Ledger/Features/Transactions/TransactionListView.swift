@@ -51,12 +51,19 @@ struct TransactionListView: View {
         activeTxns.filter { interval.contains($0.occurredAt) }
     }
 
+    private var periodRefund: Int64 {
+        periodTxns.filter { RefundService.isRefund($0) }.reduce(Int64(0)) { $0 + $1.amountMinor }
+    }
+
     private var periodExpense: Int64 {
-        periodTxns.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let gross = periodTxns.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        return RefundService.netExpense(expenseMinor: gross, refundMinor: periodRefund)
     }
 
     private var periodIncome: Int64 {
-        periodTxns.filter { $0.type == .income }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        periodTxns
+            .filter { $0.type == .income && !RefundService.isRefund($0) }
+            .reduce(Int64(0)) { $0 + $1.amountMinor }
     }
 
     private var groups: [DayGroup] {
@@ -67,8 +74,9 @@ struct TransactionListView: View {
         }
         return buckets.keys.sorted(by: >).map { key in
             let items = buckets[key] ?? []
-            let expense = items.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
-            return DayGroup(id: key, day: key, items: items, expenseMinor: expense)
+            let gross = items.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+            let refund = items.filter { RefundService.isRefund($0) }.reduce(Int64(0)) { $0 + $1.amountMinor }
+            return DayGroup(id: key, day: key, items: items, expenseMinor: RefundService.netExpense(expenseMinor: gross, refundMinor: refund))
         }
     }
 
@@ -155,6 +163,17 @@ struct TransactionListView: View {
         return map
     }
 
+    /// 每笔支出已退款合计（单次遍历，供列表与净支出展示）
+    private var refundedByTxnId: [UUID: Int64] {
+        var map: [UUID: Int64] = [:]
+        for txn in activeTxns where RefundService.isRefund(txn) {
+            if let originalId = txn.refundOfTxnId {
+                map[originalId, default: 0] += txn.amountMinor
+            }
+        }
+        return map
+    }
+
     var body: some View {
         let balances = accountBalances
         return NavigationStack {
@@ -229,7 +248,8 @@ struct TransactionListView: View {
                                         TxnRow(
                                             txn: txn,
                                             category: category(for: txn),
-                                            accountName: accountName(for: txn)
+                                            accountName: accountName(for: txn),
+                                            refundedMinor: refundedByTxnId[txn.id] ?? 0
                                         )
                                     }
                                     .swipeActions(edge: .leading) {
@@ -457,7 +477,7 @@ struct TransactionListView: View {
                     .foregroundStyle(.secondary)
             }
             Text(Money.format(amount))
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(Theme.Fonts.amountL)
                 .monospacedDigit()
                 .foregroundStyle(color)
                 .lineLimit(1)
@@ -475,7 +495,7 @@ struct TransactionListView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(Theme.Fonts.amountS)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -501,9 +521,10 @@ struct TransactionListView: View {
         guard let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()) else { return 0 }
         let start = calendar.startOfDay(for: yesterday)
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
-        return activeTxns
-            .filter { $0.type == .expense && $0.occurredAt >= start && $0.occurredAt < end }
-            .reduce(Int64(0)) { $0 + $1.amountMinor }
+        let inDay = activeTxns.filter { $0.occurredAt >= start && $0.occurredAt < end }
+        let gross = inDay.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let refund = inDay.filter { RefundService.isRefund($0) }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        return RefundService.netExpense(expenseMinor: gross, refundMinor: refund)
     }
 
     /// 仅按月视图时给出环比
@@ -513,9 +534,10 @@ struct TransactionListView: View {
         let current = AppCalendar.monthInterval(containing: period.anchor)
         guard let previousStart = calendar.date(byAdding: .month, value: -1, to: current.start) else { return nil }
         let previous = DateInterval(start: previousStart, end: current.start)
-        let previousExpense = activeTxns
-            .filter { $0.type == .expense && previous.contains($0.occurredAt) }
-            .reduce(Int64(0)) { $0 + $1.amountMinor }
+        let previousTxns = activeTxns.filter { previous.contains($0.occurredAt) }
+        let previousGross = previousTxns.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let previousRefund = previousTxns.filter { RefundService.isRefund($0) }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let previousExpense = RefundService.netExpense(expenseMinor: previousGross, refundMinor: previousRefund)
         guard previousExpense > 0 else { return nil }
         return (Double(periodExpense) - Double(previousExpense)) / Double(previousExpense)
     }
@@ -524,7 +546,7 @@ struct TransactionListView: View {
         VStack(alignment: .trailing, spacing: 2) {
             Text(title).font(.caption2).foregroundStyle(.secondary)
             Text(value)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .font(Theme.Fonts.amountS)
                 .monospacedDigit()
                 .foregroundStyle(color)
                 .lineLimit(1)
@@ -570,7 +592,7 @@ struct TransactionListView: View {
                     .lineLimit(1)
             }
             Text(Money.format(balance))
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(Theme.Fonts.amountM)
                 .monospacedDigit()
                 .foregroundStyle(balance < 0 ? Theme.danger : .primary)
                 .lineLimit(1)
@@ -668,6 +690,14 @@ struct TransactionListView: View {
             txn.deletedAt = Date()
             txn.updatedAt = Date()
             removed.append(txn)
+            // 删支出时连带软删除它的退款流水，撤销时一起恢复
+            if txn.type == .expense {
+                for refund in RefundService.refunds(of: txn, all: activeTxns) {
+                    refund.deletedAt = Date()
+                    refund.updatedAt = Date()
+                    removed.append(refund)
+                }
+            }
         }
         try? context.save()
         refreshBalances()
@@ -701,6 +731,7 @@ struct TxnRow: View {
     let txn: Txn
     let category: Category?
     let accountName: String
+    var refundedMinor: Int64 = 0
 
     private var amountColor: Color {
         switch txn.type {
@@ -725,9 +756,19 @@ struct TxnRow: View {
             CategoryIconView(category: category, size: 40)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(category?.name ?? txn.type.displayName)
-                    .font(.subheadline)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(category?.name ?? txn.type.displayName)
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    if txn.isRefund {
+                        Text("退款")
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Theme.income.opacity(0.14), in: Capsule())
+                            .foregroundStyle(Theme.income)
+                    }
+                }
                 Text(subtitle)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -737,7 +778,7 @@ struct TxnRow: View {
             Spacer()
 
             Text(amountPrefix + Money.format(abs(txn.amountMinor)))
-                .font(.subheadline.weight(.medium))
+                .font(Theme.Fonts.amountM)
                 .monospacedDigit()
                 .foregroundStyle(amountColor)
         }
@@ -752,6 +793,9 @@ struct TxnRow: View {
         }
         if let payee = txn.payee, !payee.isEmpty {
             parts.append(payee)
+        }
+        if refundedMinor > 0 {
+            parts.append("已退 \(Money.format(refundedMinor))")
         }
         parts.append(accountName)
         return parts.joined(separator: " · ")

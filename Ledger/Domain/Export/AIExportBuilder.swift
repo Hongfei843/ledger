@@ -239,7 +239,7 @@ enum AIExportBuilder {
     }
 
     private static func transactionsCSV(_ txns: [Txn], input: Input, names: AccountNames) -> String {
-        var lines = ["日期,时间,类型,金额,币种,账户,分类,备注,可报销,来源,记录ID"]
+        var lines = ["日期,时间,类型,金额,币种,账户,分类,备注,可报销,来源,记录ID,退款原记录ID"]
         for txn in txns.sorted(by: { $0.occurredAt > $1.occurredAt }) {
             let date = csvDateFormatter.string(from: txn.occurredAt)
             let parts = date.split(separator: " ")
@@ -256,7 +256,8 @@ enum AIExportBuilder {
                 note(txn, redacted: input.redacted),
                 txn.isReimbursable ? "是" : "否",
                 txn.source.rawValue,
-                txn.id.uuidString
+                txn.id.uuidString,
+                txn.refundOfTxnId?.uuidString ?? ""
             ].map(csvField)
             lines.append(row.joined(separator: ","))
         }
@@ -329,6 +330,7 @@ enum AIExportBuilder {
                 "occurredAt": isoFormatter.string(from: txn.occurredAt),
                 "note": txn.note ?? "",
                 "isReimbursable": txn.isReimbursable,
+                "refundOfTxnId": txn.refundOfTxnId?.uuidString ?? "",
                 "source": txn.source.rawValue
             ]
         }

@@ -48,6 +48,23 @@ enum Theme {
         static let icon: CGFloat = 22
     }
 
+    /// 字号规范：金额三档（26 / 17 / 13），统一圆体；等宽数字在调用处加 .monospacedDigit()
+    enum Fonts {
+        /// 超大金额：净资产、总资产
+        static let amountXL = Font.system(size: 32, weight: .bold, design: .rounded)
+        /// 卡片主金额
+        static let amountL = Font.system(size: 26, weight: .semibold, design: .rounded)
+        /// 列表金额
+        static let amountM = Font.system(size: 17, weight: .medium, design: .rounded)
+        /// 辅助金额
+        static let amountS = Font.system(size: 13, weight: .medium, design: .rounded)
+
+        /// 自定义圆体金额（用于输入框等特例）
+        static func amount(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+            .system(size: size, weight: weight, design: .rounded)
+        }
+    }
+
     // 预设主题（只换强调色）
     struct Preset: Identifiable, Hashable {
         let id: String

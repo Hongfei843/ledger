@@ -129,16 +129,14 @@ struct StatsView: View {
                 }
             }
         }
-        .padding(Theme.Spacing.l)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
+        .cardStyle(padding: Theme.Spacing.l)
     }
 
     private func metric(title: String, value: String, color: Color) -> some View {
         VStack(spacing: 2) {
             Text(title).font(.caption2).foregroundStyle(.secondary)
             Text(value)
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(Theme.Fonts.amountM)
                 .monospacedDigit()
                 .foregroundStyle(color)
                 .lineLimit(1)
@@ -227,7 +225,7 @@ struct StatsView: View {
                     VStack(spacing: 2) {
                         Text("合计").font(.caption2).foregroundStyle(.secondary)
                         Text(Money.format(totalExpense))
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .font(Theme.Fonts.amountM)
                             .monospacedDigit()
                     }
                 }

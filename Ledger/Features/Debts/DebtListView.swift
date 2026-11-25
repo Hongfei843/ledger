@@ -36,7 +36,7 @@ struct DebtListView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("应收").font(.caption2).foregroundStyle(.secondary)
                         Text(Money.format(summary.receivable))
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
+                            .font(Theme.Fonts.amountL)
                             .monospacedDigit()
                             .foregroundStyle(Theme.income)
                             .lineLimit(1).minimumScaleFactor(0.6)
@@ -45,7 +45,7 @@ struct DebtListView: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("应付").font(.caption2).foregroundStyle(.secondary)
                         Text(Money.format(summary.payable))
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
+                            .font(Theme.Fonts.amountL)
                             .monospacedDigit()
                             .foregroundStyle(Theme.warning)
                             .lineLimit(1).minimumScaleFactor(0.6)
