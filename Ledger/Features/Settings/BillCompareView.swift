@@ -125,12 +125,13 @@ struct BillCompareView: View {
         }
         .navigationTitle("账单比对")
         .navigationBarTitleDisplayMode(.inline)
-        .fileImporter(
-            isPresented: $showPicker,
-            allowedContentTypes: [.commaSeparatedText, .plainText, .text, .data, .item],
-            allowsMultipleSelection: false
-        ) { outcome in
-            handlePick(outcome)
+        .sheet(isPresented: $showPicker) {
+            DocumentPicker(allowedTypes: [.item]) { url in
+                showPicker = false
+                handlePick(url)
+            } onCancel: {
+                showPicker = false
+            }
         }
         .overlay(alignment: .bottom) {
             if let toast {
@@ -159,9 +160,8 @@ struct BillCompareView: View {
 
     // MARK: - 解析
 
-    private func handlePick(_ outcome: Result<[URL], Error>) {
+    private func handlePick(_ url: URL) {
         do {
-            guard let url = try outcome.get().first else { return }
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
             let data = try Data(contentsOf: url)

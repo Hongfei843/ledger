@@ -61,15 +61,10 @@ struct EntrySheet: View {
         baseAccounts.filter { $0.id != selectedAccountId }
     }
 
-    /// 每个分类的累计记账笔数，用于动态排序
-    private var usageCounts: [UUID: Int] {
-        var counts: [UUID: Int] = [:]
-        for txn in allTxns where txn.deletedAt == nil {
-            guard let categoryId = txn.categoryId else { continue }
-            counts[categoryId, default: 0] += 1
-        }
-        return counts
-    }
+    /// 每个分类的累计记账笔数。只在出现时算一次，避免每次渲染都扫全表。
+    @State private var usageCache: [UUID: Int] = [:]
+
+    private var usageCounts: [UUID: Int] { usageCache }
 
     private var filteredCategories: [Category] {
         let kind: CategoryKind = selectedType == .income ? .income : .expense
@@ -137,6 +132,15 @@ struct EntrySheet: View {
                 Task { await recognize(item) }
             }
             .onAppear(perform: prepareDefaults)
+            .task {
+                // 统计频次放到渲染之后，避免打开面板时卡顿
+                var counts: [UUID: Int] = [:]
+                for txn in allTxns where txn.deletedAt == nil {
+                    guard let categoryId = txn.categoryId else { continue }
+                    counts[categoryId, default: 0] += 1
+                }
+                usageCache = counts
+            }
         }
     }
 
@@ -155,9 +159,8 @@ struct EntrySheet: View {
                !filteredAccounts.contains(where: { $0.id == current }) {
                 selectedAccountId = filteredAccounts.first?.id
             }
-            if newValue != .expense {
-                isReimbursable = false
-            }
+            // 注意：不要在这里重置 isReimbursable。
+            // 用户可能只是去看一眼收入分类再切回来，勾选状态应该保留。
         }
     }
 
@@ -217,14 +220,14 @@ struct EntrySheet: View {
         }
     }
 
-    /// 常用：按历史使用频次取前 8 个；都没用过就取默认前 8 个
+    /// 常用：按历史使用频次取前 6 个（正好一行）；都没用过就取默认前 6 个
     private var frequentCategories: [Category] {
         let counts = usageCounts
         let used = filteredCategories
             .filter { (counts[$0.id] ?? 0) > 0 }
             .sorted { (counts[$0.id] ?? 0) > (counts[$1.id] ?? 0) }
-        let top = Array(used.prefix(8))
-        return top.isEmpty ? Array(filteredCategories.prefix(8)) : top
+        let top = Array(used.prefix(6))
+        return top.isEmpty ? Array(filteredCategories.prefix(6)) : top
     }
 
     private var remainingCategories: [Category] {

@@ -57,6 +57,12 @@ struct SettingsView: View {
                     LabeledContent("账户数", value: "\(accounts.filter { $0.deletedAt == nil }.count)")
                 }
 
+                Section("维护") {
+                    NavigationLink("初始化数据") {
+                        ResetDataView()
+                    }
+                }
+
                 Section("外观") {
                     Picker("分类图标", selection: $iconStyle) {
                         ForEach(IconStyle.allCases) { style in

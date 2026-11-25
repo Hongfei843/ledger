@@ -173,14 +173,13 @@ struct ImportView: View {
                 }
             }
         }
-        .fileImporter(
-            isPresented: $showPicker,
-            // 放宽类型：微信/QQ 的文件常是动态类型（dyn.*），
-            // 只允许 .commaSeparatedText 会导致文件能看见但点不动。
-            allowedContentTypes: [.commaSeparatedText, .plainText, .text, .data, .item],
-            allowsMultipleSelection: false
-        ) { result in
-            handlePick(result)
+        .sheet(isPresented: $showPicker) {
+            DocumentPicker(allowedTypes: [.item]) { url in
+                showPicker = false
+                load(url: url)
+            } onCancel: {
+                showPicker = false
+            }
         }
         .alert("导入完成", isPresented: Binding(
             get: { summary != nil },

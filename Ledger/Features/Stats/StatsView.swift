@@ -205,13 +205,22 @@ struct StatsView: View {
             if slices.isEmpty {
                 emptyHint
             } else {
-                Chart(slices.prefix(8).map { $0 }, id: \.id) { slice in
+                Chart(0..<min(slices.count, 8), id: \.self) { index in
+                    let slice = slices[index]
                     SectorMark(
                         angle: .value("金额", slice.amountMinor),
                         innerRadius: .ratio(0.62),
                         angularInset: 1.5
                     )
-                    .foregroundStyle(Color(hexString: slice.colorHex))
+                    .foregroundStyle(palette[index % palette.count])
+                    .annotation(position: .overlay) {
+                        let ratio = totalExpense > 0 ? Double(slice.amountMinor) / Double(totalExpense) : 0
+                        if ratio >= 0.08 {
+                            Text(String(format: "%.0f%%", ratio * 100))
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                    }
                 }
                 .frame(height: 170)
                 .overlay {
@@ -232,13 +241,17 @@ struct StatsView: View {
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
     }
 
+    private var palette: [Color] {
+        Theme.chartPalette(max(1, min(slices.count, 8)))
+    }
+
     /// 环形图图例：颜色 + 分类名 + 占比
     private var legendGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 6) {
-            ForEach(slices.prefix(8), id: \.id) { slice in
+            ForEach(Array(slices.prefix(8).enumerated()), id: \.element.id) { index, slice in
                 HStack(spacing: 5) {
                     Circle()
-                        .fill(Color(hexString: slice.colorHex))
+                        .fill(palette[index % palette.count])
                         .frame(width: 8, height: 8)
                     Text(slice.name)
                         .font(.caption2)
@@ -272,11 +285,11 @@ struct StatsView: View {
             if slices.isEmpty {
                 emptyHint
             } else {
-                ForEach(slices.prefix(10), id: \.id) { slice in
+                ForEach(Array(slices.prefix(10).enumerated()), id: \.element.id) { index, slice in
                     NavigationLink {
                         CategoryTxnListView(categoryId: slice.id, range: interval, title: slice.name)
                     } label: {
-                        rankRow(slice)
+                        rankRow(slice, color: palette[index % palette.count])
                     }
                     .buttonStyle(.plain)
                 }
@@ -288,10 +301,16 @@ struct StatsView: View {
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
     }
 
-    private func rankRow(_ slice: CategorySlice) -> some View {
+    private func rankRow(_ slice: CategorySlice, color: Color) -> some View {
         let ratio = totalExpense > 0 ? Double(slice.amountMinor) / Double(totalExpense) : 0
         return HStack(spacing: Theme.Spacing.m) {
             CategoryIconView(emoji: slice.emoji, name: slice.name, colorHex: slice.colorHex, size: 28)
+                .overlay(alignment: .bottomTrailing) {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 7, height: 7)
+                        .offset(x: 1, y: 1)
+                }
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
@@ -303,7 +322,7 @@ struct StatsView: View {
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color(.secondarySystemBackground))
                         Capsule()
-                            .fill(Color(hexString: slice.colorHex))
+                            .fill(color)
                             .frame(width: max(2, geo.size.width * ratio))
                     }
                 }

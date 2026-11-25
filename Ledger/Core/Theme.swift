@@ -63,6 +63,26 @@ enum Theme {
         Preset(id: "sakura", name: "樱粉", hex: 0xC98A9B),
         Preset(id: "lemon", name: "柠檬", hex: 0xB8952E)
     ]
+
+    /// 图表配色：以当前主题色为基准生成同色系渐变，保证换主题时图表也跟着变
+    static func chartPalette(_ count: Int) -> [Color] {
+        guard count > 0 else { return [] }
+        let base = UIColor(hexString: accentHex)
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard base.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else {
+            return Array(repeating: accent, count: count)
+        }
+        return (0..<count).map { index in
+            let step = CGFloat(index)
+            let newHue = (hue + step * 0.085).truncatingRemainder(dividingBy: 1)
+            let newSaturation = max(0.30, min(0.85, saturation - CGFloat(index % 3) * 0.07))
+            let newBrightness = max(0.45, min(0.95, brightness + CGFloat(index % 2) * 0.10))
+            return Color(uiColor: UIColor(hue: newHue, saturation: newSaturation, brightness: newBrightness, alpha: 1))
+        }
+    }
 }
 
 extension Color {

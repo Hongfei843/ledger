@@ -81,24 +81,43 @@ struct CategoryManageView: View {
     private func section(title: String, items: [Category]) -> some View {
         Section(title) {
             ForEach(items, id: \.id) { category in
-                Button {
-                    editing = category
-                } label: {
-                    HStack {
-                        Text(category.iconEmoji)
-                        Text(category.name)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        if let count = usage[category.id], count > 0 {
-                            Text("\(count)")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
+                HStack(spacing: Theme.Spacing.s) {
+                    Button {
+                        editing = category
+                    } label: {
+                        HStack(spacing: Theme.Spacing.s) {
+                            Text(category.iconEmoji)
+                            Text(category.name)
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if let count = usage[category.id], count > 0 {
+                                Text("\(count)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
                         }
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
                     }
+                    .buttonStyle(.plain)
+
+                    NavigationLink {
+                        CategoryTxnListView(
+                            categoryId: category.id,
+                            range: DateInterval(
+                                start: Date.distantPast,
+                                end: Date().addingTimeInterval(86400)
+                            ),
+                            title: category.name
+                        )
+                    } label: {
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: 30, height: 30)
+                            .background(Theme.accent.opacity(0.12), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("查看该分类的条目")
                 }
                 .swipeActions(edge: .trailing) {
                     Button(role: .destructive) {

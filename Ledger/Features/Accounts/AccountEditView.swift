@@ -9,6 +9,7 @@ struct AccountEditView: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var books: [Book]
     @Query private var allAccounts: [Account]
+    @Query private var allTxns: [Txn]
 
     @State private var name = ""
     @State private var bankId: String?
@@ -88,7 +89,7 @@ struct AccountEditView: View {
                             showDeleteConfirm = true
                         }
                     } footer: {
-                        Text("归档后不再出现在记账与对账里，历史流水保留。删除是软删除，同样保留历史。")
+                        Text(deleteFooter(account))
                     }
                 }
             }
@@ -119,8 +120,17 @@ struct AccountEditView: View {
         }
     }
 
-    private func load() {
-        guard let account else { return }
+    private func deleteFooter(_ account: Account) -> String {
+        let count = allTxns.filter {
+            $0.deletedAt == nil && ($0.accountId == account.id || $0.counterAccountId == account.id)
+        }.count
+        if count == 0 {
+            return "该账户还没有流水，删除不影响任何记录。归档后不再出现在记账与对账里。"
+        }
+        return "该账户有 \(count) 笔历史流水。删除后这些记录完整保留（明细里仍显示账户名），只是不能再选它记账。卡停用、平台注销时用删除更合适。"
+    }
+
+    private func load() {        guard let account else { return }
         name = account.name
         bankId = account.bankId
         cardTail = account.cardTail ?? ""

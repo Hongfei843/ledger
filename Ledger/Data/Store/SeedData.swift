@@ -10,7 +10,7 @@ enum SeedData {
     }
 
     private static let versionKey = "seed.categories.version"
-    static let currentVersion = 4
+    static let currentVersion = 5
 
     static let expenseCategories: [CategorySeed] = [
         CategorySeed(name: "餐饮", emoji: "🍜"),
@@ -18,6 +18,8 @@ enum SeedData {
         CategorySeed(name: "购物", emoji: "🛍️"),
         CategorySeed(name: "日用", emoji: "🧻"),
         CategorySeed(name: "居住", emoji: "🏠"),
+        CategorySeed(name: "房租", emoji: "🔑"),
+        CategorySeed(name: "水电燃气", emoji: "💡"),
         CategorySeed(name: "通讯", emoji: "📱"),
         CategorySeed(name: "娱乐", emoji: "🎮"),
         CategorySeed(name: "医疗", emoji: "💊"),
@@ -25,6 +27,7 @@ enum SeedData {
         CategorySeed(name: "人情", emoji: "🎁"),
         CategorySeed(name: "旅行", emoji: "✈️"),
         CategorySeed(name: "宠物", emoji: "🐱"),
+        CategorySeed(name: "母婴", emoji: "🍼"),
         CategorySeed(name: "订阅服务", emoji: "🔔"),
         CategorySeed(name: "利息支出", emoji: "🏦"),
         CategorySeed(name: "手续费", emoji: "🧾"),
@@ -51,7 +54,7 @@ enum SeedData {
         "咖啡奶茶": "餐饮", "外卖": "餐饮", "买菜": "餐饮", "水果": "餐饮", "零食": "餐饮", "烟酒": "餐饮",
         "打车": "交通", "公交地铁": "交通", "加油": "交通", "停车": "交通",
         "服饰": "购物", "美妆": "购物", "数码": "购物", "家装": "购物",
-        "物业": "居住", "水电燃气": "居住", "宽带": "居住", "电费": "居住", "水费": "居住",
+        "物业": "居住", "宽带": "居住", "电费": "水电燃气", "水费": "水电燃气",
         "电影": "娱乐", "健身": "娱乐",
         "药品": "医疗", "体检": "医疗",
         "书籍": "教育",

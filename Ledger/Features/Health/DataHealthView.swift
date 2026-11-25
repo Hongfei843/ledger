@@ -21,7 +21,7 @@ struct DataHealthView: View {
         let level: InsightLevel
         let route: Route?
 
-        enum Route { case reconciliation, reimbursement, accounts, categories }
+        enum Route { case reconciliation, reimbursement, accounts, categories, duplicates }
     }
 
     private var uncategorized: [Txn] {
@@ -128,7 +128,7 @@ struct DataHealthView: View {
                 detail: "同一天、同金额、同账户、同备注出现多次，可能是重复记账",
                 symbol: "doc.on.doc",
                 level: .info,
-                route: nil
+                route: .duplicates
             ))
         }
 
@@ -266,6 +266,8 @@ struct DataHealthView: View {
             AccountsView()
         case .categories:
             CategoryManageView()
+        case .duplicates:
+            DuplicateReviewView()
         }
     }
 }
