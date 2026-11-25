@@ -14,15 +14,19 @@ on:
   workflow_dispatch:
     inputs:
       runner:
-        description: "Runner 标签：macos-15-arm64（默认）/ macos-26-arm64 / macos-15(Intel，容量差)"
+        description: "Runner 标签：macos-15（arm64 标准池，默认）/ macos-15-intel（Intel 池）/ macos-26 / xcode-27-arm64；不是镜像目录名，别写 macos-15-arm64"
         required: false
-        default: macos-15-arm64
+        default: macos-15
         type: string
 
 jobs:
   build:
-    # Intel 的 macos-15 池 2026-11 起经常拿不到 runner，默认用 arm64 池。
-    # 部署目标 18.0、无 iOS 26 专有 API，Xcode 16/26 都能正常构建。
+    # 标准 macOS 托管 runner 的合法标签（见 actions/runner-images README）：
+    #   macos-15        = macOS 15 arm64（默认）
+    #   macos-15-intel  = macOS 15 x64（Intel 池，容量可能更好）
+    #   macos-26        = macOS 26 arm64（= macos-latest）
+    #   xcode-27-arm64  = macOS 27 + Xcode 27 预览
+    # 不要用 macos-15-arm64 / macos-26-arm64 —— 那是镜像目录名，标签不存在，job 会永远排队。
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 40
 

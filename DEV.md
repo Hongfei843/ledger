@@ -86,9 +86,9 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 - 必须保留 `ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES`，否则备选图标变空白
 - 版本号由 CI 注入 `1.0.<run_number>`
 - 只在 workflow_dispatch 触发；推送后跑 `.gh/ci.ps1` 主动构建（push 不再自动跑，避免重复排队）
-- CI 默认跑 `macos-15-arm64`；Intel 的 `macos-15` 池在 2026-11 容量极差（图片停在 8 月，基本拿不到 runner）
-- dispatch 时可用 `inputs.runner` 换标签（`macos-15-arm64` / `macos-26-arm64` / `macos-15`）
-- **job 排队约 15 分钟后 `cancelled` 且 0 步执行 = runner 容量问题，不是编译失败**；跑 `.gh/retry-ci.ps1` 自动重放（会轮换 runner 标签）
+- 标准 runner 合法标签（见 `actions/runner-images` README）：`macos-15`（默认，arm64）、`macos-15-intel`（x64）、`macos-26`（arm64）、`xcode-27-arm64`
+- ⚠️ `macos-15-arm64` / `macos-26-arm64` 是镜像目录名，**不是合法标签**，写了 job 会永远排队
+- 2026-11 起 macOS 托管 runner 容量长期紧张（尤其 arm64）：job 排队一段时间后 `cancelled` 且 0 步执行 = 平台容量问题，不是编译失败；跑 `.gh/ci-race.ps1` 自动轮换标签重试并抓包
 
 ## 6. 测试覆盖（76）
 
