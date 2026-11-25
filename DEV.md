@@ -13,7 +13,7 @@
 - 推送：`pwsh -File .gh/push.ps1 -Message "..."`
 - 构建：`pwsh -File .gh/ci.ps1`（会自动等结果并抓失败日志）
 - 令牌：`.gh/token.txt`（仓库外，7 天过期）
-- 测试：92 个用例，CI 每次真跑
+- 测试：108 个用例，CI 每次真跑
 - 最近绿色构建：2026-11-25 run 45618783849（`macos-15-intel`，92 测试全绿，含截图记账/退款/借入借出）
 
 ## 1. 产品定位
@@ -25,9 +25,9 @@
 
 **记账**：支出/收入/转账；金额、分类、账户、日期、商家、备注、可报销；快捷日期（今天/昨天/前天）、记住上次账户与分类；截图识别预填（快捷指令/操作按钮、相册、文件打开）；右滑编辑、左滑删除（5 秒撤销）。
 
-**首页**：日/周/月/年/自定义周期切换；收支双卡 + 结余/昨日/净资产；账户横滑卡；7 天内到期提醒；未对账提醒；搜索。
+**首页**：日/周/月/年/自定义周期切换；收支双卡 + 结余/昨日/净资产；账户横滑卡；7 天内到期提醒；未对账提醒；搜索（关键词/金额区间/时间范围/可报销/退款）。
 
-**账户**：8 种类型；银行/平台品牌图标（32 个）；卡号后四位；余额校准；信用卡账单日/还款日/额度；账单登记与还款核销。
+**账户**：8 种类型；银行/平台品牌图标（32 个）；卡号后四位；余额校准；信用卡账单日/还款日/额度；账单登记与还款核销。资产总览含近 6 个月净资产趋势（按月末重算余额）。
 
 **分类**：22 个宽口径分类（餐饮/交通/购物/日用/居住/房租/水电燃气/通讯/娱乐/医疗/教育/人情/旅行/宠物/母婴/订阅服务/利息支出/手续费/保险/税费/报销差额/其他）；记账页分「常用 6 个」与「全部」；分类管理可改名、换图标、归档、查看条目。
 
@@ -39,7 +39,9 @@
 
 **退款**：支出详情里「记一笔退款」，退款挂到原支出上：统计冲减支出、不算收入；列表/详情有退款标记，删支出会连带删退款。
 
-**对账**：一页填实际余额；差异自动生成调整；每次对账留痕（`ReconciliationRun`）。
+**常用组合**：记一笔时点模板一键套用（类型/金额/账户/分类/商家/备注），在「我的 → 常用组合」里增删改。
+
+**对账**：一页填实际余额；差异自动生成调整；每次对账留痕（ReconciliationRun）。
 
 **导入导出**：Cookie CSV 导入（自动归类）；支付宝/微信账单比对（漏记/多记）；AI 分析包（ZIP）；完整备份 JSON。
 
@@ -93,11 +95,11 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 - ⚠️ `macos-15-arm64` / `macos-26-arm64` 是镜像目录名，**不是合法标签**，写了 job 会永远排队
 - 2026-11 起 macOS 托管 runner 容量长期紧张（尤其 arm64）：job 排队后 `cancelled` 且 0 步执行 = 平台容量问题，不是编译失败；跑 `.gh/ci-race.ps1` 自动轮换标签重试并抓包
 
-## 6. 测试覆盖（92）
+## 6. 测试覆盖（108）
 
-Money、Balance、StatsEngine、LoanCalculator、CreditCardCycle、Statement、Debt、Refund、
-ScreenshotImport、CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、RecurringEngine、
-ScreenshotParser、InsightEngine、ZipWriter、Smoke。
+Money、Balance、StatsEngine、NetWorthHistory、LoanCalculator、CreditCardCycle、Statement、Debt、Refund、
+ScreenshotImport、QuickTemplate、TxnSearch、CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、
+RecurringEngine、ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 
 ## 7. 已知限制
 
@@ -107,7 +109,7 @@ ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 4. 组合贷需手动录两笔
 5. 快捷指令需要手动建一次（见「我的 → 截图记账」里的步骤），iOS 不允许 App 自动安装快捷指令
 6. 无预算、无二级分类
-7. 金额字号与卡片样式已在首页/统计/详情/借贷页统一（`Theme.Fonts`），报销/贷款等二级页面还在收尾
+7. 金额字号已全量统一到 `Theme.Fonts`；个别二级页面内边距还可以继续微调
 8. 提前还款重算是 O(n²)，单次无感
 9. 退款按退款发生月冲减支出：跨月退款不会回改原月份的统计（原月份仍是当时花的钱）
 
@@ -115,8 +117,8 @@ ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 
 1. **分享扩展**：任意 App 里分享截图直接进轻账（需要新 extension target，自签时要确认重签包含 appex）。
 2. **App Intents / Siri**：需先验证 XcodeGen 工程的 App Intents metadata 生成，再接 Siri 与原生快捷指令动作。
-3. 常用组合一键复用（账户+分类+金额）。
-4. 搜索增强：按金额区间、账户、可报销筛选。
+3. **投资/理财账户**：基金、股票、理财收益统计，往「个人金融全统一」再进一步（需要新账户类型 + 持仓/收益率模型）。
+4. **信用卡账单联动**：账单日自动生成待还提醒、还款核销与账单周期更紧密。
 5. 银行图标补地方银行（素材库有 300+ 家）。
 6. 小组件（需额外 target，自签会复杂）。
 7. 上架准备：换素材、隐私政策、CloudKit 同步（付费账号可用）。

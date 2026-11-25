@@ -12,7 +12,7 @@ final class QuickTemplateTests: XCTestCase {
         return (active, archived)
     }
 
-    private func makeCategories() -> (live: Category, deleted: Category) {
+    private func makeCategories() -> (live: Ledger.Category, deleted: Ledger.Category) {
         let live = Category(bookId: bookId, name: "餐饮", kind: .expense, iconEmoji: "🍜")
         let deleted = Category(bookId: bookId, name: "旧分类", kind: .expense, iconEmoji: "🗑")
         deleted.deletedAt = Date()
