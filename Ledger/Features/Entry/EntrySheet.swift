@@ -345,7 +345,7 @@ struct EntrySheet: View {
     /// 快捷日期：今天 / 昨天 / 前天
     private func quickDateChip(_ title: String, daysAgo: Int) -> some View {
         let target = quickDate(daysAgo)
-        let selected = AppCalendar.startOfDay(for: occurredAt) == AppCalendar.startOfDay(for: target)
+        let selected = AppCalendar.isSameDay(occurredAt, target)
         return Button {
             occurredAt = target
             Haptics.selection()
