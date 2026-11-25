@@ -12,6 +12,7 @@ enum ModelContainerFactory {
         LoanScheduleItem.self,
         Statement.self,
         ReconciliationRun.self,
+        Debt.self,
         MerchantRule.self,
         CaptureRecord.self,
         RecurringRule.self
