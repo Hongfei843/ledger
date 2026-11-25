@@ -13,7 +13,7 @@
 - 推送：`pwsh -File .gh/push.ps1 -Message "..."`
 - 构建：`pwsh -File .gh/ci.ps1`（会自动等结果并抓失败日志）
 - 令牌：`.gh/token.txt`（仓库外，7 天过期）
-- 测试：74 个用例，CI 每次真跑
+- 测试：76 个用例，CI 每次真跑
 
 ## 1. 产品定位
 
@@ -85,12 +85,14 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 - 不手写 `.xcodeproj`，由 `project.yml` 生成
 - 必须保留 `ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES`，否则备选图标变空白
 - 版本号由 CI 注入 `1.0.<run_number>`
-- CI 用 `macos-15`（arm64 经常排队被取消）
-- 排队失败时跑 `.gh/retry-ci.ps1` 自动重试
+- 只在 workflow_dispatch 触发；推送后跑 `.gh/ci.ps1` 主动构建（push 不再自动跑，避免重复排队）
+- CI 默认跑 `macos-15-arm64`；Intel 的 `macos-15` 池在 2026-11 容量极差（图片停在 8 月，基本拿不到 runner）
+- dispatch 时可用 `inputs.runner` 换标签（`macos-15-arm64` / `macos-26-arm64` / `macos-15`）
+- **job 排队约 15 分钟后 `cancelled` 且 0 步执行 = runner 容量问题，不是编译失败**；跑 `.gh/retry-ci.ps1` 自动重放（会轮换 runner 标签）
 
-## 6. 测试覆盖（74）
+## 6. 测试覆盖（76）
 
-Money、Balance、StatsEngine、LoanCalculator、CreditCardCycle、Statement、
+Money、Balance、StatsEngine、LoanCalculator、CreditCardCycle、Statement、Debt、
 CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、RecurringEngine、
 ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 
@@ -108,18 +110,18 @@ ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 ## 8. 下一轮建议（按优先级）
 
 1. **账单退款**：退款与原账单关联，而不是只记一笔收入。
-2. **账单退款**：退款与原账单关联，而不是只记一笔收入。
-3. **全局字号规范**：三档金额字号（26/17/13）+ 统一卡片内边距。
-4. 常用组合一键复用（账户+分类+金额）。
-5. 银行图标补地方银行（素材库有 300+ 家）。
-6. 小组件（需额外 target，自签会复杂）。
-7. 上架准备：换素材、隐私政策、CloudKit 同步（付费账号可用）。
+2. **全局字号规范**：三档金额字号（26/17/13）+ 统一卡片内边距。
+3. 常用组合一键复用（账户+分类+金额）。
+4. 银行图标补地方银行（素材库有 300+ 家）。
+5. 小组件（需额外 target，自签会复杂）。
+6. 上架准备：换素材、隐私政策、CloudKit 同步（付费账号可用）。
 
 ## 9. 排查手册
 
 | 现象 | 位置 |
 |---|---|
 | 构建失败 | CI 日志搜 `error:`；常见 API 名笔误、参数顺序 |
+| job `cancelled` 且 0 步 | macOS runner 容量问题，非编译失败；`.gh/retry-ci.ps1` 重试或换 runner 标签 |
 | 单测失败 | 搜 `LedgerTests/.*swift` |
 | 文件选不中 | 已用 `DocumentPicker(asCopy: true)`，仍失败查 UI |
 | 深色看不见 | 颜色必须走 Theme |

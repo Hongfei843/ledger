@@ -1,26 +1,41 @@
 name: Build unsigned IPA
 
-# 用法：Actions 页面 → 左侧 "Build unsigned IPA" → Run workflow
+# 用法：Actions 页面 → 左侧 "Build unsigned IPA" → Run workflow。
 # 产物：该次运行页面底部 Artifacts → Ledger-unsigned-ipa（解压即 .ipa）
 # 说明：产出的是「未签名」IPA，需要你在本地用 Sideloadly / SideStore 重签后安装。
 #
 # 工程由 project.yml + XcodeGen 生成（不手写 .xcodeproj，避免格式错误）。
+#
+# 2026-11 起只在 workflow_dispatch 触发：push 不再自动跑，避免每次推送产生两份排队。
+# macOS 托管 runner 容量紧张时，job 会排队约 15 分钟后在 0 步执行的情况下被 cancelled，
+# 这不是编译失败：用 .gh/retry-ci.ps1 自动重放，或换 runner 标签（inputs.runner）。
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
+    inputs:
+      runner:
+        description: "Runner 标签：macos-15-arm64（默认）/ macos-26-arm64 / macos-15(Intel，容量差)"
+        required: false
+        default: macos-15-arm64
+        type: string
 
 jobs:
   build:
-    # arm64（macos-26）经常因容量排队到超时被取消，改用 x64 的 macos-15 更稳。
-    # 部署目标 18.0、无 iOS 26 专有 API，Xcode 16 能正常构建。
-    runs-on: macos-15
+    # Intel 的 macos-15 池 2026-11 起经常拿不到 runner，默认用 arm64 池。
+    # 部署目标 18.0、无 iOS 26 专有 API，Xcode 16/26 都能正常构建。
+    runs-on: ${{ inputs.runner }}
     timeout-minutes: 40
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Show runner info
+        shell: bash
+        run: |
+          uname -m
+          sw_vers
+          echo "runner=${{ inputs.runner }}"
 
       - name: Select newest Xcode
         shell: bash
