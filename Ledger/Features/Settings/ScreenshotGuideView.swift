@@ -9,13 +9,15 @@ struct ScreenshotGuideView: View {
                     .font(.callout)
             }
 
-            Section("推荐：快捷指令 + 操作按钮") {
+            Section {
                 guideRow(1, "打开「快捷指令」→ 新建快捷指令")
                 guideRow(2, "添加动作「截屏」")
                 guideRow(3, "添加动作「存储文件」：保存位置选「我的 iPhone → 轻账」，关闭「询问保存位置」")
                 guideRow(4, "添加动作「打开 URL」，填 ledger://import-screenshot")
                 guideRow(5, "命名为「轻账截图记账」，然后到 设置 → 操作按钮 → 快捷指令 选它")
                 guideRow(6, "在付款页、账单页按操作按钮，截图会自动被识别并打开预填的记账页")
+            } header: {
+                Text("推荐：快捷指令 + 操作按钮")
             } footer: {
                 Text("也可以把这个快捷指令放进控制中心或锁屏，效果一样。")
             }
