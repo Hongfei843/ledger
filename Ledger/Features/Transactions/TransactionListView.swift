@@ -233,12 +233,17 @@ struct TransactionListView: View {
                 Button {
                     showEntry = true
                 } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background(Theme.accent, in: Circle())
-                        .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("记一笔")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .frame(height: 50)
+                    .background(Theme.accent, in: Capsule())
+                    .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
                 }
                 .padding(.trailing, Theme.Spacing.xl)
                 .padding(.bottom, Theme.Spacing.xxl)
@@ -384,57 +389,66 @@ struct TransactionListView: View {
     // MARK: - 汇总
 
     private var monthSummaryCard: some View {
-        VStack(spacing: Theme.Spacing.m) {
-            HStack(alignment: .lastTextBaseline, spacing: Theme.Spacing.l) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(period.kind.summaryLabel)支出\(yesterdayExpense > 0 ? " · 昨日 \(Money.format(yesterdayExpense))" : "")")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text(Money.format(periodExpense))
-                        .font(.system(size: 26, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    if let delta = monthOverMonth {
-                        HStack(spacing: 3) {
-                            Image(systemName: delta >= 0 ? "arrow.up.right" : "arrow.down.right")
-                            Text(String(format: "%+.0f%% 较上月", delta * 100))
-                        }
-                        .font(.caption2)
-                        .foregroundStyle(delta > 0 ? Theme.warning : Theme.income)
-                    }
-                }
-                Spacer(minLength: Theme.Spacing.s)
-                summaryItem(title: "收入", value: Money.format(periodIncome), color: Theme.income)
-                summaryItem(title: "结余", value: Money.format(periodIncome - periodExpense), color: .primary)
+        VStack(spacing: Theme.Spacing.s) {
+            HStack(spacing: Theme.Spacing.s) {
+                summaryTile(title: "支出", emoji: "💸", amount: periodExpense, color: .primary)
+                summaryTile(title: "收入", emoji: "💰", amount: periodIncome, color: Theme.income)
             }
-
-            Rectangle()
-                .fill(Color.primary.opacity(0.06))
-                .frame(maxWidth: .infinity)
-                .frame(height: 0.5)
 
             NavigationLink {
                 AssetOverviewView()
             } label: {
-                HStack(spacing: 4) {
-                    Text("净资产")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(Money.format(netWorthMinor))
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(netWorthMinor < 0 ? Theme.danger : .primary)
+                HStack(spacing: Theme.Spacing.s) {
+                    metric("结余", Money.format(periodIncome - periodExpense))
+                    Divider().frame(height: 18)
+                    metric("昨日", Money.format(yesterdayExpense))
+                    Divider().frame(height: 18)
+                    metric("净资产", Money.format(netWorthMinor))
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.tertiary)
                 }
+                .padding(.horizontal, Theme.Spacing.m)
+                .padding(.vertical, 10)
+                .cardStyle(radius: 12)
             }
             .buttonStyle(.plain)
         }
-        .cardStyle(padding: Theme.Spacing.l)
+    }
+
+    private func summaryTile(title: String, emoji: String, amount: Int64, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                Text(emoji).font(.system(size: 13))
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text(Money.format(amount))
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Theme.Spacing.m)
+        .cardStyle(radius: 14)
+    }
+
+    private func metric(_ title: String, _ value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     /// 资产为正、负债为负，直接相加即净资产

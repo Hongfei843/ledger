@@ -64,7 +64,8 @@ enum Theme {
         Preset(id: "lemon", name: "柠檬", hex: 0xB8952E)
     ]
 
-    /// 图表配色：以当前主题色为基准生成同色系渐变，保证换主题时图表也跟着变
+    /// 图表配色：以主题色为起点，按黄金角 0.618 旋转色相，
+    /// 保证相邻扇区颜色差得足够开（之前是线性小步长，颜色太接近）。
     static func chartPalette(_ count: Int) -> [Color] {
         guard count > 0 else { return [] }
         let base = UIColor(hexString: accentHex)
@@ -75,11 +76,13 @@ enum Theme {
         guard base.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else {
             return Array(repeating: accent, count: count)
         }
+
+        let goldenAngle: CGFloat = 0.618
         return (0..<count).map { index in
-            let step = CGFloat(index)
-            let newHue = (hue + step * 0.085).truncatingRemainder(dividingBy: 1)
-            let newSaturation = max(0.30, min(0.85, saturation - CGFloat(index % 3) * 0.07))
-            let newBrightness = max(0.45, min(0.95, brightness + CGFloat(index % 2) * 0.10))
+            let newHue = (hue + CGFloat(index) * goldenAngle).truncatingRemainder(dividingBy: 1)
+            // 饱和度/亮度交替，进一步拉开明暗差
+            let newSaturation = index % 2 == 0 ? CGFloat(0.62) : CGFloat(0.45)
+            let newBrightness = index % 3 == 0 ? CGFloat(0.88) : CGFloat(0.72)
             return Color(uiColor: UIColor(hue: newHue, saturation: newSaturation, brightness: newBrightness, alpha: 1))
         }
     }

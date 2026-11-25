@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct SettingsView: View {
     @Query private var txns: [Txn]
@@ -9,6 +10,20 @@ struct SettingsView: View {
     @AppStorage(CategoryIcon.styleKey) private var iconStyle: String = IconStyle.emoji.rawValue
     @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
     @AppStorage(NotificationService.enabledKey) private var remindersEnabled = false
+    @State private var currentIconName: String? = UIApplication.shared.alternateIconName
+
+    private struct AppIconOption: Identifiable {
+        let id: String?
+        let title: String
+        let preview: String
+    }
+
+    private let iconOptions: [AppIconOption] = [
+        AppIconOption(id: nil, title: "默认", preview: "iconPreview_default"),
+        AppIconOption(id: "AppIconMinimal", title: "极简", preview: "iconPreview_minimal"),
+        AppIconOption(id: "AppIconCoin", title: "金币", preview: "iconPreview_coin"),
+        AppIconOption(id: "AppIconChart", title: "图表", preview: "iconPreview_chart")
+    ]
 
     private var liveTxns: [Txn] {
         txns.filter { $0.deletedAt == nil }
@@ -104,11 +119,54 @@ struct SettingsView: View {
                     Text("包含：贷款到期前 3 天与当天、信用卡还款日前 3 天与当天、账单日次日提醒登记账单、每月 1 号对账提醒、每周日备份提醒。全部本地通知，不联网。")
                 }
 
+                Section("应用图标") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: Theme.Spacing.l) {
+                            ForEach(iconOptions) { option in
+                                iconCell(option)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 Section("关于") {
                     LabeledContent("版本", value: appVersionText)
                 }
             }
             .navigationTitle("我的")
+        }
+    }
+
+    private func iconCell(_ option: AppIconOption) -> some View {
+        let selected = currentIconName == option.id
+        return Button {
+            applyIcon(option.id)
+        } label: {
+            VStack(spacing: 6) {
+                Image(option.preview)
+                    .resizable()
+                    .frame(width: 58, height: 58)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(selected ? Theme.accent : Color.clear, lineWidth: 2)
+                    )
+                Text(option.title)
+                    .font(.caption2)
+                    .foregroundStyle(selected ? Theme.accent : .secondary)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func applyIcon(_ name: String?) {
+        guard UIApplication.shared.supportsAlternateIcons else { return }
+        UIApplication.shared.setAlternateIconName(name) { error in
+            if error == nil {
+                currentIconName = name
+                Haptics.success()
+            }
         }
     }
 
