@@ -17,8 +17,11 @@ struct TransactionListView: View {
     ) private var allTxns: [Txn]
     @Query private var accounts: [Account]
     @Query private var categories: [Category]
+    @Query private var loans: [Loan]
+    @Query private var scheduleItems: [LoanScheduleItem]
 
     @State private var showEntry = false
+    @State private var editingTxn: Txn?
     @State private var period = PeriodRange()
     @State private var showCustomRange = false
     @State private var customStart = Date()
@@ -30,6 +33,15 @@ struct TransactionListView: View {
     private struct ToastState: Equatable {
         let message: String
         let actionTitle: String?
+    }
+
+    private struct DueReminder: Identifiable {
+        let id: String
+        let title: String
+        let detail: String
+        let days: Int
+        let accountId: UUID?
+        let loanId: UUID?
     }
 
     private var activeTxns: [Txn] { allTxns }
@@ -73,10 +85,67 @@ struct TransactionListView: View {
         }
     }
 
+    /// 7 天内要还款的信用卡与贷款
+    private var dueReminders: [DueReminder] {
+        let calendar = AppCalendar.gregorian
+        let today = calendar.startOfDay(for: Date())
+        var result: [DueReminder] = []
+
+        for account in accounts where account.deletedAt == nil && !account.isArchived && account.type.isCreditLike {
+            guard let billDay = account.billDay, let dueDay = account.dueDay, billDay > 0, dueDay > 0 else { continue }
+            let cycle = CreditCardCycle(billDay: billDay, dueDay: dueDay)
+            guard let due = cycle.dueDate(reference: Date()) else { continue }
+            let days = calendar.dateComponents([.day], from: today, to: calendar.startOfDay(for: due)).day ?? 99
+            guard days >= 0, days <= 7 else { continue }
+            result.append(
+                DueReminder(
+                    id: "card-\(account.id.uuidString)",
+                    title: account.displayName,
+                    detail: "还款日 \(DateFormatter.ledgerShort.string(from: due))",
+                    days: days,
+                    accountId: account.id,
+                    loanId: nil
+                )
+            )
+        }
+
+        for item in scheduleItems where item.deletedAt == nil && !item.isPaid {
+            guard let loan = loans.first(where: { $0.id == item.loanId && $0.deletedAt == nil && $0.status == .active }) else { continue }
+            let days = calendar.dateComponents([.day], from: today, to: calendar.startOfDay(for: item.dueDate)).day ?? 99
+            guard days >= 0, days <= 7 else { continue }
+            result.append(
+                DueReminder(
+                    id: "loan-\(item.id.uuidString)",
+                    title: loan.name,
+                    detail: "第 \(item.periodIndex) 期 · \(Money.format(item.totalMinor))",
+                    days: days,
+                    accountId: nil,
+                    loanId: loan.id
+                )
+            )
+        }
+
+        return result.sorted { $0.days < $1.days }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
                 List {
+                    if !dueReminders.isEmpty {
+                        Section {
+                            ForEach(dueReminders) { item in
+                                NavigationLink {
+                                    reminderDestination(item)
+                                } label: {
+                                    reminderRow(item)
+                                }
+                            }
+                        } header: {
+                            Text("即将到期")
+                        }
+                    }
+
                     if !staleAccounts.isEmpty {
                         Section {
                             NavigationLink {
@@ -129,6 +198,14 @@ struct TransactionListView: View {
                                             category: category(for: txn),
                                             accountName: accountName(for: txn)
                                         )
+                                    }
+                                    .swipeActions(edge: .leading) {
+                                        Button {
+                                            editingTxn = txn
+                                        } label: {
+                                            Text("编辑")
+                                        }
+                                        .tint(Theme.accent)
                                     }
                                 }
                                 .onDelete { offsets in
@@ -204,6 +281,12 @@ struct TransactionListView: View {
                     showToast(message, actionTitle: "再记一笔") {
                         showEntry = true
                     }
+                }
+                .presentationDetents([.large])
+            }
+            .sheet(item: $editingTxn) { txn in
+                EntrySheet(editingTxn: txn) { message in
+                    showToast(message)
                 }
                 .presentationDetents([.large])
             }
@@ -301,7 +384,7 @@ struct TransactionListView: View {
         VStack(spacing: Theme.Spacing.m) {
             HStack(alignment: .lastTextBaseline, spacing: Theme.Spacing.l) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(period.kind.summaryLabel)支出")
+                    Text("\(period.kind.summaryLabel)支出\(yesterdayExpense > 0 ? " · 昨日 \(Money.format(yesterdayExpense))" : "")")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Text(Money.format(periodExpense))
@@ -310,6 +393,14 @@ struct TransactionListView: View {
                         .contentTransition(.numericText())
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
+                    if let delta = monthOverMonth {
+                        HStack(spacing: 3) {
+                            Image(systemName: delta >= 0 ? "arrow.up.right" : "arrow.down.right")
+                            Text(String(format: "%+.0f%% 较上月", delta * 100))
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(delta > 0 ? Theme.warning : Theme.income)
+                    }
                 }
                 Spacer(minLength: Theme.Spacing.s)
                 summaryItem(title: "收入", value: Money.format(periodIncome), color: Theme.income)
@@ -341,8 +432,7 @@ struct TransactionListView: View {
     }
 
     /// 资产为正、负债为负，直接相加即净资产
-    private var netWorthMinor: Int64 {
-        accounts
+    private var netWorthMinor: Int64 {        accounts
             .filter { $0.deletedAt == nil && !$0.isArchived }
             .reduce(Int64(0)) { partial, account in
                 partial + BalanceService.balance(
@@ -351,6 +441,31 @@ struct TransactionListView: View {
                     openingBalanceMinor: account.openingBalanceMinor
                 )
             }
+    }
+
+    /// 昨日支出
+    private var yesterdayExpense: Int64 {
+        let calendar = AppCalendar.gregorian
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()) else { return 0 }
+        let start = calendar.startOfDay(for: yesterday)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
+        return activeTxns
+            .filter { $0.type == .expense && $0.occurredAt >= start && $0.occurredAt < end }
+            .reduce(Int64(0)) { $0 + $1.amountMinor }
+    }
+
+    /// 仅按月视图时给出环比
+    private var monthOverMonth: Double? {
+        guard period.kind == .month else { return nil }
+        let calendar = AppCalendar.gregorian
+        let current = AppCalendar.monthInterval(containing: period.anchor)
+        guard let previousStart = calendar.date(byAdding: .month, value: -1, to: current.start) else { return nil }
+        let previous = DateInterval(start: previousStart, end: current.start)
+        let previousExpense = activeTxns
+            .filter { $0.type == .expense && previous.contains($0.occurredAt) }
+            .reduce(Int64(0)) { $0 + $1.amountMinor }
+        guard previousExpense > 0 else { return nil }
+        return (Double(periodExpense) - Double(previousExpense)) / Double(previousExpense)
     }
 
     private func summaryItem(title: String, value: String, color: Color) -> some View {
@@ -417,6 +532,33 @@ struct TransactionListView: View {
         .frame(width: 132, alignment: .leading)
         .padding(Theme.Spacing.m)
         .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func reminderRow(_ item: DueReminder) -> some View {
+        HStack(spacing: Theme.Spacing.m) {
+            Image(systemName: "bell.badge")
+                .font(.system(size: 14))
+                .foregroundStyle(item.days <= 1 ? Theme.danger : Theme.warning)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title).font(.subheadline)
+                Text(item.detail).font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(item.days == 0 ? "今天" : "\(item.days) 天后")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(item.days <= 1 ? Theme.danger : Theme.warning)
+        }
+    }
+
+    @ViewBuilder
+    private func reminderDestination(_ item: DueReminder) -> some View {
+        if let accountId = item.accountId, let account = accounts.first(where: { $0.id == accountId }) {
+            AccountDetailView(account: account)
+        } else if let loanId = item.loanId, let loan = loans.first(where: { $0.id == loanId }) {
+            LoanDetailView(loan: loan)
+        } else {
+            EmptyView()
+        }
     }
 
     private var emptyState: some View {

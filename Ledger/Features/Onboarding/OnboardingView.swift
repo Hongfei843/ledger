@@ -125,6 +125,7 @@ struct OnboardingView: View {
                 }
                 .padding(Theme.Spacing.m)
                 .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
             }
         }
     }
@@ -172,6 +173,7 @@ struct OnboardingView: View {
             }
             .padding(Theme.Spacing.m)
             .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
         }
         .buttonStyle(.plain)
     }

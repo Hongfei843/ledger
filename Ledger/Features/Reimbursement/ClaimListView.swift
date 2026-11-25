@@ -93,6 +93,7 @@ struct ClaimListView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Theme.Spacing.l)
         .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
     }
 
     private func claimRow(_ claim: Claim) -> some View {

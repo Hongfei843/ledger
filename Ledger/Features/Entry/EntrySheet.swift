@@ -322,12 +322,21 @@ struct EntrySheet: View {
             selectedAccountId = filteredAccounts.first?.id
         }
         if selectedCategoryId == nil && selectedType != .transfer {
-            selectedCategoryId = filteredCategories.first?.id
+            // 优先复用上次记账用过的分类
+            if let raw = UserDefaults.standard.string(forKey: Self.lastCategoryKey),
+               let lastId = UUID(uuidString: raw),
+               filteredCategories.contains(where: { $0.id == lastId }) {
+                selectedCategoryId = lastId
+            } else {
+                selectedCategoryId = filteredCategories.first?.id
+            }
         }
         if selectedType == .transfer && counterAccountId == nil {
             counterAccountId = transferTargets.first?.id
         }
     }
+
+    private static let lastCategoryKey = "entry.lastCategoryId"
 
     private func appendKey(_ key: String) {
         if key == "⌫" {
@@ -385,6 +394,10 @@ struct EntrySheet: View {
         try? context.save()
         refreshBalances()
         Haptics.success()
+
+        if let categoryId = selectedCategoryId {
+            UserDefaults.standard.set(categoryId.uuidString, forKey: Self.lastCategoryKey)
+        }
 
         let categoryName = filteredCategories.first { $0.id == selectedCategoryId }?.name ?? "已记录"
         onSaved?("\(categoryName) \(Money.format(amountMinor))")
