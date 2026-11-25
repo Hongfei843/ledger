@@ -5,9 +5,19 @@ struct CategoryManageView: View {
     @Environment(\.modelContext) private var context
     @Query private var categories: [Category]
     @Query private var books: [Book]
+    @Query private var txns: [Txn]
 
     @State private var editing: Category?
     @State private var showNew = false
+
+    private var usage: [UUID: Int] {
+        var counts: [UUID: Int] = [:]
+        for txn in txns where txn.deletedAt == nil {
+            guard let categoryId = txn.categoryId else { continue }
+            counts[categoryId, default: 0] += 1
+        }
+        return counts
+    }
 
     private var expense: [Category] {
         categories
@@ -79,6 +89,12 @@ struct CategoryManageView: View {
                         Text(category.name)
                             .foregroundStyle(.primary)
                         Spacer()
+                        if let count = usage[category.id], count > 0 {
+                            Text("\(count)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
                         Image(systemName: "chevron.right")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)

@@ -36,6 +36,23 @@ struct ImportView: View {
         Array(Set(records.map { $0.primaryCategory })).sorted()
     }
 
+    /// 预览「账单分类 → 本地分类」的映射结果
+    private var categoryPreview: [(source: String, target: String)] {
+        let existing = (try? context.fetch(FetchDescriptor<Category>())) ?? []
+        var seen = Set<String>()
+        var result: [(String, String)] = []
+
+        for record in records {
+            let name = record.primaryCategory
+            guard !seen.contains(name) else { continue }
+            seen.insert(name)
+            let kind: CategoryKind = record.isIncome ? .income : .expense
+            let target = CategoryMatcher.match(name: name, kind: kind, categories: existing)?.name ?? "其他"
+            result.append((name, target))
+        }
+        return Array(result.prefix(8))
+    }
+
     var body: some View {
         Form {
             Section {
@@ -88,10 +105,32 @@ struct ImportView: View {
                     }
                 }
 
-                Section("识别到的分类（会自动创建）") {
+                Section {
                     Text(categoryNames.joined(separator: "、"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } header: {
+                    Text("账单里的分类")
+                } footer: {
+                    Text("导入时会自动落到已有的宽口径分类（例如「咖啡奶茶 → 餐饮」「电费 → 居住」），不会把分类表撑乱。下面是前几条映射预览。")
+                }
+
+                if !categoryPreview.isEmpty {
+                    Section("归类预览") {
+                        ForEach(categoryPreview, id: \.source) { item in
+                            HStack(spacing: 6) {
+                                Text(item.source)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.tertiary)
+                                Text(item.target)
+                                    .font(.caption)
+                                Spacer()
+                            }
+                        }
+                    }
                 }
 
                 Section("预览") {
