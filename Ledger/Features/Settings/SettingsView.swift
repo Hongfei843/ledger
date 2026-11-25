@@ -54,6 +54,9 @@ struct SettingsView: View {
                     NavigationLink("资产总览") {
                         AssetOverviewView()
                     }
+                    NavigationLink("资金计划") {
+                        CashFlowPlanView()
+                    }
                     NavigationLink("周期记账") {
                         RecurringListView()
                     }
