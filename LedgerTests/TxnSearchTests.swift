@@ -25,7 +25,9 @@ final class TxnSearchTests: XCTestCase {
             accountId: account ?? accountId,
             occurredAt: occurredAt,
             categoryId: category,
-            counterAccountId: counterAccount
+            counterAccountId: counterAccount,
+            payee: payee,
+            note: note
         )
     }
 
