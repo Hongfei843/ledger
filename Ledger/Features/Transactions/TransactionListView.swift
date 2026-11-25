@@ -169,16 +169,19 @@ struct TransactionListView: View {
                         periodBar
                             .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
                             .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
 
                         monthSummaryCard
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
                             .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
 
                     Section {
                         accountStrip
                             .listRowInsets(EdgeInsets())
                             .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
 
                     if groups.isEmpty {
@@ -407,7 +410,10 @@ struct TransactionListView: View {
                 summaryItem(title: "结余", value: Money.format(periodIncome - periodExpense), color: .primary)
             }
 
-            Divider()
+            Rectangle()
+                .fill(Color.primary.opacity(0.06))
+                .frame(maxWidth: .infinity)
+                .frame(height: 0.5)
 
             NavigationLink {
                 AssetOverviewView()
@@ -563,6 +569,9 @@ struct TransactionListView: View {
 
     private var emptyState: some View {
         VStack(spacing: Theme.Spacing.m) {
+            Image(systemName: "tray")
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(.tertiary)
             Text("\(greeting)，这里还空着")
                 .font(.headline)
             Text("点右下角的 + 记第一笔")
