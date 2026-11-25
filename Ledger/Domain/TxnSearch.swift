@@ -68,7 +68,7 @@ struct TxnSearchCriteria: Equatable {
         if onlyRefunds && !RefundService.isRefund(txn) { return false }
         if let minAmountMinor, txn.amountMinor < minAmountMinor { return false }
         if let maxAmountMinor, txn.amountMinor > maxAmountMinor { return false }
-        if let interval, !interval.contains(txn.occurredAt) { return false }
+        if let range = interval(), !range.contains(txn.occurredAt) { return false }
 
         let query = keyword.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !query.isEmpty else { return true }
