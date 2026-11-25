@@ -178,10 +178,12 @@ struct TransactionListView: View {
                     }
 
                     Section {
-                        accountStrip
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
+                        if !cardAccounts.isEmpty {
+                            accountStrip
+                                .listRowInsets(EdgeInsets())
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                        }
                     }
 
                     if groups.isEmpty {
@@ -229,6 +231,7 @@ struct TransactionListView: View {
                     }
                 }
                 .listStyle(.insetGrouped)
+                .listSectionSpacing(10)
 
                 Button {
                     showEntry = true

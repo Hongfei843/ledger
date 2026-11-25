@@ -9,6 +9,7 @@ struct ResetDataView: View {
 
     @State private var countdown: Int?
     @State private var done = false
+    @State private var showFinalConfirm = false
 
     private var armed: Bool { countdown == nil && !done }
 
@@ -17,9 +18,19 @@ struct ResetDataView: View {
             Section {
                 Label("清空后不可恢复", systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(Theme.danger)
-                Text("会删除全部账户、流水、报销单、贷款、账单与设置，然后重建默认分类。建议先导出一次备份。")
+                Text("会删除全部账户、流水、报销单、贷款、账单与设置，然后重建默认分类。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section {
+                NavigationLink {
+                    ExportView()
+                } label: {
+                    Label("先导出一次备份", systemImage: "square.and.arrow.up")
+                }
+            } footer: {
+                Text("导出的 zip 含完整备份，换机或误清空时可以恢复。")
             }
 
             Section {
@@ -42,21 +53,29 @@ struct ResetDataView: View {
                 }
                 .disabled(countdown != nil || done)
             } footer: {
-                Text("清空完成后，App 会像第一次打开一样，需要重新添加账户。")
+                Text("倒计时结束后还会再弹一次确认，不会直接删除。")
             }
         }
         .navigationTitle("初始化数据")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("确认清空所有数据？", isPresented: $showFinalConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("清空", role: .destructive) { wipe() }
+        } message: {
+            Text("此操作不可撤销。如果没有备份，数据将永久丢失。")
+        }
     }
 
     private func startCountdown() {
         countdown = 3
         Task {
-            for remaining in stride(from: 2, through: 0, by: -1) {
+            for remaining in stride(from: 2, through: 1, by: -1) {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 countdown = remaining
             }
-            wipe()
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            countdown = nil
+            showFinalConfirm = true
         }
     }
 

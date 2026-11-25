@@ -5,6 +5,10 @@ struct RootTabView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
     @AppStorage("onboarding.completed") private var onboardingCompleted = false
+    @AppStorage("security.lockEnabled") private var lockEnabled = false
+
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var unlocked = false
 
     @State private var showOnboarding = false
 
@@ -42,6 +46,16 @@ struct RootTabView: View {
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView()
         }
+        .overlay {
+            if lockEnabled && !unlocked {
+                LockScreenView { unlocked = true }
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                unlocked = false
+            }
+        }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
             // 补记周期交易（房租、订阅等），失败不影响启动
@@ -74,4 +88,46 @@ struct PlaceholderTab: View {
 struct SharedFile: Identifiable {
     let id = UUID()
     let url: URL
+}
+
+/// 应用锁
+struct LockScreenView: View {
+    let onUnlock: () -> Void
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+
+            VStack(spacing: Theme.Spacing.m) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(Theme.accent)
+                Text("轻账已锁定")
+                    .font(.headline)
+                Text("用面容 ID 或设备密码解锁")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("解锁") {
+                    unlock()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+            }
+        }
+        .task {
+            if await BiometricLock.authenticate() {
+                onUnlock()
+            }
+        }
+    }
+
+    private func unlock() {
+        Task {
+            if await BiometricLock.authenticate() {
+                onUnlock()
+            }
+        }
+    }
 }

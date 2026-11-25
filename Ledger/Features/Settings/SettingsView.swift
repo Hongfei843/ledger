@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage(CategoryIcon.styleKey) private var iconStyle: String = IconStyle.emoji.rawValue
     @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
     @AppStorage(NotificationService.enabledKey) private var remindersEnabled = false
+    @AppStorage("security.lockEnabled") private var lockEnabled = false
     @State private var currentIconName: String? = UIApplication.shared.alternateIconName
 
     private struct AppIconOption: Identifiable {
@@ -117,6 +118,23 @@ struct SettingsView: View {
                     Text("提醒")
                 } footer: {
                     Text("包含：贷款到期前 3 天与当天、信用卡还款日前 3 天与当天、账单日次日提醒登记账单、每月 1 号对账提醒、每周日备份提醒。全部本地通知，不联网。")
+                }
+
+                Section {
+                    Toggle("面容 ID / 密码锁", isOn: $lockEnabled)
+                        .onChange(of: lockEnabled) { _, enabled in
+                            guard enabled else { return }
+                            Task {
+                                let ok = await BiometricLock.authenticate(reason: "开启应用锁")
+                                if !ok {
+                                    await MainActor.run { lockEnabled = false }
+                                }
+                            }
+                        }
+                } header: {
+                    Text("安全")
+                } footer: {
+                    Text("开启后，每次从后台回到轻账都需要验证。数据本身仍只存在本机。")
                 }
 
                 Section("应用图标") {
