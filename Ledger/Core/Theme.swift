@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// 视觉 token：颜色、间距、圆角。所有视图只能引用这里的值。
 enum Theme {
@@ -6,24 +7,28 @@ enum Theme {
     static let accentHexKey = "ui.accentHex"
     static let defaultAccentHex = "5B7C99"
 
-    /// 当前强调色（跟随设置）
+    /// 当前强调色（跟随设置；深色模式下自动提亮，保证在深色背景上可读）
     static var accentHex: String {
         UserDefaults.standard.string(forKey: accentHexKey) ?? defaultAccentHex
     }
 
     static var accent: Color {
-        Color(hexString: accentHex)
+        let hex = accentHex
+        return Color(uiColor: UIColor { traits in
+            let base = UIColor(hexString: hex)
+            return traits.userInterfaceStyle == .dark ? base.lightened(by: 0.28) : base
+        })
     }
 
-    // 语义色
-    static let income = Color(hex: 0x2E9E6B)
-    static let warning = Color(hex: 0xC2410C)
-    static let danger = Color(hex: 0xDC2626)
+    // 语义色：明暗各一套，避免深色下过暗看不清
+    static let income = Color(light: 0x1F8A5B, dark: 0x4CD38C)
+    static let warning = Color(light: 0xC2410C, dark: 0xFF9E64)
+    static let danger = Color(light: 0xDC2626, dark: 0xFF6B6B)
     static let transfer = Color.secondary
 
-    // 背景
-    static let pageBackground = Color(hex: 0xF6F6F7)
-    static let cardBackground = Color.white
+    // 背景：使用系统动态色，自动跟随深色模式
+    static let pageBackground = Color(uiColor: .systemGroupedBackground)
+    static let cardBackground = Color(uiColor: .secondarySystemGroupedBackground)
 
     // 间距
     enum Spacing {
@@ -72,5 +77,44 @@ extension Color {
         let cleaned = hexString.replacingOccurrences(of: "#", with: "")
         let value = UInt32(cleaned, radix: 16) ?? 0x5B7C99
         self.init(hex: value)
+    }
+
+    /// 明暗两套颜色
+    init(light: UInt32, dark: UInt32) {
+        self.init(uiColor: UIColor { traits in
+            UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light)
+        })
+    }
+}
+
+extension UIColor {
+    convenience init(hex: UInt32) {
+        self.init(
+            red: CGFloat((hex >> 16) & 0xFF) / 255.0,
+            green: CGFloat((hex >> 8) & 0xFF) / 255.0,
+            blue: CGFloat(hex & 0xFF) / 255.0,
+            alpha: 1
+        )
+    }
+
+    convenience init(hexString: String) {
+        let cleaned = hexString.replacingOccurrences(of: "#", with: "")
+        self.init(hex: UInt32(cleaned, radix: 16) ?? 0x5B7C99)
+    }
+
+    /// 与白色混合，用于深色模式下提亮品牌色
+    func lightened(by amount: CGFloat) -> UIColor {
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        guard getRed(&r, green: &g, blue: &b, alpha: &a) else { return self }
+        let t = min(max(amount, 0), 1)
+        return UIColor(
+            red: r + (1 - r) * t,
+            green: g + (1 - g) * t,
+            blue: b + (1 - b) * t,
+            alpha: a
+        )
     }
 }

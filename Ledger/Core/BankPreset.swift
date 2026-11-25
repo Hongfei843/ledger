@@ -1,9 +1,13 @@
 import SwiftUI
 import UIKit
 
+// MARK: - 素材来源
+// 银行与支付渠道图标来自 Cookie 记账 App 资源包（用户自行提取，仅个人自用）。
+// ⚠️ 这些是第三方商标素材，上架 App Store 前必须替换为自有或已授权素材。
+// 详见 Ledger/Resources/ASSETS_SOURCE.md。
+
 /// 银行 / 平台预设。
-/// 不使用官方 Logo（商标风险，且上架审核敏感），
-/// 改用「品牌色 + 单字缩写」的品牌标记，识别度足够且无版权负担。
+/// 有内置图标时显示图标，否则退回「品牌色 + 单字缩写」。
 struct BankPreset: Identifiable, Hashable {
     let id: String
     let name: String
@@ -41,12 +45,17 @@ struct BankPreset: Identifiable, Hashable {
         // 平台
         BankPreset(id: "alipay", name: "支付宝", short: "支", colorHex: "1677FF", darkText: false, suggestedType: .ewallet),
         BankPreset(id: "wechat", name: "微信", short: "微", colorHex: "07C160", darkText: false, suggestedType: .ewallet),
+        BankPreset(id: "qq", name: "QQ 钱包", short: "Q", colorHex: "12B7F5", darkText: false, suggestedType: .ewallet),
+        BankPreset(id: "yeb", name: "余额宝", short: "余", colorHex: "F5A623", darkText: false, suggestedType: .ewallet),
+        BankPreset(id: "lqt", name: "零钱通", short: "零", colorHex: "F7B500", darkText: true, suggestedType: .ewallet),
+        BankPreset(id: "szrmb", name: "数字人民币", short: "数", colorHex: "E60012", darkText: false, suggestedType: .ewallet),
         BankPreset(id: "unionpay", name: "云闪付", short: "云", colorHex: "E60012", darkText: false, suggestedType: .ewallet),
         BankPreset(id: "huabei", name: "花呗", short: "花", colorHex: "1677FF", darkText: false, suggestedType: .bnpl),
         BankPreset(id: "jiebei", name: "借呗", short: "借", colorHex: "1677FF", darkText: false, suggestedType: .bnpl),
-        BankPreset(id: "jdbt", name: "京东白条", short: "白", colorHex: "E1251B", darkText: false, suggestedType: .bnpl),
+        BankPreset(id: "jdbt", name: "京东", short: "京", colorHex: "E1251B", darkText: false, suggestedType: .bnpl),
         BankPreset(id: "douyin", name: "抖音月付", short: "抖", colorHex: "FE2C55", darkText: false, suggestedType: .bnpl),
-        BankPreset(id: "meituan", name: "美团月付", short: "美", colorHex: "FFD100", darkText: true, suggestedType: .bnpl),
+        BankPreset(id: "dywallet", name: "抖音钱包", short: "抖", colorHex: "000000", darkText: false, suggestedType: .ewallet),
+        BankPreset(id: "meituan", name: "美团", short: "美", colorHex: "FFD100", darkText: true, suggestedType: .bnpl),
         BankPreset(id: "pdd", name: "拼多多", short: "拼", colorHex: "E02E24", darkText: false, suggestedType: .ewallet),
         BankPreset(id: "didi", name: "滴滴", short: "滴", colorHex: "FF7F41", darkText: false, suggestedType: .ewallet),
         BankPreset(id: "applepay", name: "Apple Pay", short: "", colorHex: "1C1C1E", darkText: false, suggestedType: .ewallet),
@@ -88,7 +97,7 @@ struct BankMarkView: View {
             if let logoImage {
                 ZStack {
                     RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                        .fill(Color(hexString: preset?.colorHex ?? fallbackColorHex).opacity(0.10))
+                        .fill(Color(uiColor: .tertiarySystemFill))
                     Image(uiImage: logoImage)
                         .resizable()
                         .scaledToFit()
@@ -108,7 +117,7 @@ struct BankMarkView: View {
                 Text(fallbackEmoji)
                     .font(.system(size: size * 0.46))
                     .frame(width: size, height: size)
-                    .background(Color(hexString: fallbackColorHex).opacity(0.12), in: Circle())
+                    .background(Color(uiColor: .tertiarySystemFill), in: Circle())
             }
         }
     }

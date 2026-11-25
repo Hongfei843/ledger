@@ -57,6 +57,7 @@ Ledger/                                   # 仓库根
 │  │  ├─ Haptics.swift                    # 触感统一入口
 │  │  ├─ CategoryIcon.swift               # 分类图标风格（Emoji / SF Symbol）
 │  │  ├─ BankPreset.swift                 # 银行/平台预设 + 品牌标记视图
+│  │  ├─ PeriodRange.swift                # 日/周/月/年/自定义区间
 │  │  ├─ ZipWriter.swift                  # 自实现 ZIP（store + CRC32）
 │  │  └─ NotificationService.swift        # 还款/对账本地通知
 │  │
@@ -88,7 +89,8 @@ Ledger/                                   # 仓库根
 │  │
 │  ├─ Features/
 │  │  ├─ Entry/EntrySheet.swift           # 记一笔（键盘/分类/账户/日期/报销）
-│  │  ├─ Transactions/TransactionListView.swift   # 首页
+│  │  ├─ Transactions/TransactionListView.swift   # 首页（周期切换 + 账户卡片）
+│  │  ├─ Transactions/SearchView.swift            # 搜索（备注/金额/分类/账户）
 │  │  ├─ Transactions/TxnDetailView.swift         # 详情 + 同类别对比
 │  │  ├─ Stats/StatsView.swift            # 统计 + 洞察
 │  │  ├─ Stats/CategoryTxnListView.swift  # 分类下钻
@@ -159,6 +161,7 @@ Ledger/                                   # 仓库根
 | ScreenshotParserTests | 取最大金额、排除余额行、商户提取、置信度 |
 | InsightEngineTests | 异常大额、订阅识别、空数据不出洞察 |
 | RecurringEngineTests | 月末收敛、每日补记、暂停、未来规则、上限 |
+| PeriodRangeTests | 周一为周首、自定义区间含结束日、跨月/跨年切换 |
 
 ## 7. 已知问题与限制
 
@@ -183,6 +186,7 @@ Ledger/                                   # 仓库根
 | 数据没了 | 覆盖安装不丢；卸载会丢，用导出包恢复 |
 | 余额对不上 | 设置 → 对账，逐账户填实际余额；或看数据健康度 |
 | 周期账没生成 | 检查规则是否暂停 / 未开自动生成 / 开始日期在未来 |
+| **构建排队后被取消** | GitHub 托管 macOS runner 容量不足（`not acquired by Runner`）。跑 `.gh/retry-ci.ps1` 自动重试，或稍后手动重跑；与代码无关 |
 
 ## 9. 迭代路线
 

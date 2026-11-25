@@ -104,7 +104,7 @@ struct CategoryIconView: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(tint.opacity(0.12))
+                .fill(tint.opacity(0.18))
             if styleRaw == IconStyle.symbol.rawValue {
                 Image(systemName: CategoryIcon.symbol(for: name))
                     .font(.system(size: size * 0.42, weight: .regular))
