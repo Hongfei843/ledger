@@ -91,6 +91,9 @@ struct RootTabView: View {
         .onChange(of: showOnboarding) { _, showing in
             if !showing { takePendingScreenshotDraft() }
         }
+        .onChange(of: unlocked) { _, didUnlock in
+            if didUnlock { takePendingScreenshotDraft() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .screenshotImportReady)) { _ in
             takePendingScreenshotDraft()
         }
@@ -153,12 +156,17 @@ struct RootTabView: View {
     }
 
     private func present(_ draft: ScreenshotImportDraft) {
+        // 应用锁未解锁时不弹表单，先存起来，解锁后再弹，避免金额露在锁屏上
+        if lockEnabled && !unlocked {
+            ScreenshotImportStore.save(draft)
+            return
+        }
         ScreenshotImportStore.clear()
         importDraft = draft
     }
 
     private func takePendingScreenshotDraft() {
-        guard importDraft == nil, !showOnboarding else { return }
+        guard importDraft == nil, !showOnboarding, !(lockEnabled && !unlocked) else { return }
         if let draft = ScreenshotImportStore.take() {
             importDraft = draft
         }
