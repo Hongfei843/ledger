@@ -9,6 +9,7 @@ struct RootTabView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var unlocked = false
+    @State private var showPrivacyShield = false
 
     @State private var showOnboarding = false
 
@@ -51,7 +52,15 @@ struct RootTabView: View {
                 LockScreenView { unlocked = true }
             }
         }
+        .overlay {
+            if showPrivacyShield {
+                PrivacyShieldView()
+                    .transition(.opacity)
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
+            // 切到后台/任务切换器时用不透明遮罩盖住内容，避免被截图
+            showPrivacyShield = phase != .active
             if phase == .background {
                 unlocked = false
             }
@@ -81,6 +90,26 @@ struct PlaceholderTab: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.pageBackground)
+    }
+}
+
+/// 隐私遮罩：切后台时盖住内容，防止任务切换器里看到账目
+struct PrivacyShieldView: View {
+    var body: some View {
+        ZStack {
+            Theme.pageBackground
+                .ignoresSafeArea()
+            VStack(spacing: Theme.Spacing.s) {
+                Image(systemName: "lock.shield")
+                    .font(.system(size: 30, weight: .light))
+                    .foregroundStyle(Theme.accent)
+                Text("轻账")
+                    .font(.headline)
+                Text("内容已隐藏")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 }
 

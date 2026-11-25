@@ -128,8 +128,36 @@ struct TransactionListView: View {
         return result.sorted { $0.days < $1.days }
     }
 
+    /// 一次遍历算出所有账户余额。
+    /// 之前每个卡片各算一次，账户多时是 O(账户 × 流水)，列表滚动会卡。
+    private var accountBalances: [UUID: Int64] {
+        var map: [UUID: Int64] = [:]
+        for account in accounts where account.deletedAt == nil && !account.isArchived {
+            map[account.id] = account.openingBalanceMinor
+        }
+        for txn in activeTxns {
+            switch txn.type {
+            case .expense:
+                if let value = map[txn.accountId] { map[txn.accountId] = value - txn.amountMinor }
+            case .income:
+                if let value = map[txn.accountId] { map[txn.accountId] = value + txn.amountMinor }
+            case .transfer:
+                if let value = map[txn.accountId] { map[txn.accountId] = value - txn.amountMinor }
+                if let counter = txn.counterAccountId, let value = map[counter] {
+                    map[counter] = value + txn.amountMinor
+                }
+            case .adjustment:
+                if let value = map[txn.accountId] { map[txn.accountId] = value + txn.amountMinor }
+            case .loanPayment:
+                break
+            }
+        }
+        return map
+    }
+
     var body: some View {
-        NavigationStack {
+        let balances = accountBalances
+        return NavigationStack {
             ZStack(alignment: .bottomTrailing) {
                 List {
                     if !dueReminders.isEmpty {
@@ -171,7 +199,7 @@ struct TransactionListView: View {
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
 
-                        monthSummaryCard
+                        monthSummaryCard(balances)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -179,7 +207,7 @@ struct TransactionListView: View {
 
                     Section {
                         if !cardAccounts.isEmpty {
-                            accountStrip
+                            accountStrip(balances)
                                 .listRowInsets(EdgeInsets())
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
@@ -391,8 +419,9 @@ struct TransactionListView: View {
 
     // MARK: - 汇总
 
-    private var monthSummaryCard: some View {
-        VStack(spacing: Theme.Spacing.s) {
+    private func monthSummaryCard(_ balances: [UUID: Int64]) -> some View {
+        let netWorth = balances.values.reduce(Int64(0), +)
+        return VStack(spacing: Theme.Spacing.s) {
             HStack(spacing: Theme.Spacing.s) {
                 summaryTile(title: "支出", emoji: "💸", amount: periodExpense, color: .primary)
                 summaryTile(title: "收入", emoji: "💰", amount: periodIncome, color: Theme.income)
@@ -406,7 +435,7 @@ struct TransactionListView: View {
                     Divider().frame(height: 18)
                     metric("昨日", Money.format(yesterdayExpense))
                     Divider().frame(height: 18)
-                    metric("净资产", Money.format(netWorthMinor))
+                    metric("净资产", Money.format(netWorth))
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.tertiary)
@@ -510,14 +539,14 @@ struct TransactionListView: View {
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    private var accountStrip: some View {
+    private func accountStrip(_ balances: [UUID: Int64]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Theme.Spacing.m) {
                 ForEach(cardAccounts, id: \.id) { account in
                     NavigationLink {
                         AccountDetailView(account: account)
                     } label: {
-                        accountCard(account)
+                        accountCard(account, balance: balances[account.id] ?? 0)
                     }
                     .buttonStyle(.plain)
                 }
@@ -527,13 +556,8 @@ struct TransactionListView: View {
         }
     }
 
-    private func accountCard(_ account: Account) -> some View {
-        let balance = BalanceService.balance(
-            of: account,
-            transactions: activeTxns,
-            openingBalanceMinor: account.openingBalanceMinor
-        )
-        return VStack(alignment: .leading, spacing: 6) {
+    private func accountCard(_ account: Account, balance: Int64) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 BankMarkView(
                     bankId: account.bankId,
@@ -554,7 +578,7 @@ struct TransactionListView: View {
         }
         .frame(width: 132, alignment: .leading)
         .padding(Theme.Spacing.m)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .cardStyle(radius: 14)
     }
 
     private func reminderRow(_ item: DueReminder) -> some View {

@@ -10,14 +10,10 @@ struct CategoryManageView: View {
     @State private var editing: Category?
     @State private var showNew = false
 
-    private var usage: [UUID: Int] {
-        var counts: [UUID: Int] = [:]
-        for txn in txns where txn.deletedAt == nil {
-            guard let categoryId = txn.categoryId else { continue }
-            counts[categoryId, default: 0] += 1
-        }
-        return counts
-    }
+    @State private var usageCache: [UUID: Int] = [:]
+
+    /// 只算一次，避免每次渲染都扫全表
+    private var usage: [UUID: Int] { usageCache }
 
     private var expense: [Category] {
         categories
@@ -63,6 +59,14 @@ struct CategoryManageView: View {
         }
         .navigationTitle("分类管理")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            var counts: [UUID: Int] = [:]
+            for txn in txns where txn.deletedAt == nil {
+                guard let categoryId = txn.categoryId else { continue }
+                counts[categoryId, default: 0] += 1
+            }
+            usageCache = counts
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showNew = true } label: { Image(systemName: "plus") }

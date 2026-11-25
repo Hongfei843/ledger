@@ -15,6 +15,7 @@ struct OnboardingView: View {
     @State private var billDay = 5
     @State private var dueDay = 25
     @State private var didCreate = false
+    @State private var showAddAccount = false
 
     private struct Preset: Identifiable {
         let id: String
@@ -40,7 +41,7 @@ struct OnboardingView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ProgressView(value: Double(step + 1), total: 4)
+                ProgressView(value: Double(step + 1), total: 5)
                     .padding(.horizontal, Theme.Spacing.xl)
                     .padding(.top, Theme.Spacing.s)
 
@@ -49,7 +50,8 @@ struct OnboardingView: View {
                         switch step {
                         case 0: welcome
                         case 1: accountPicker
-                        case 2: creditSettings
+                        case 2: accountSetup
+                        case 3: creditSettings
                         default: finish
                         }
                     }
@@ -66,6 +68,9 @@ struct OnboardingView: View {
                     Button("跳过") { finishOnboarding() }
                         .foregroundStyle(.secondary)
                 }
+            }
+            .sheet(isPresented: $showAddAccount) {
+                AccountEditView(account: nil)
             }
         }
     }
@@ -108,6 +113,78 @@ struct OnboardingView: View {
                 }
             }
         }
+    }
+
+    private var accountSetup: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
+            Text("补一下余额")
+                .font(.title3.weight(.semibold))
+            Text("现在填好，之后记账余额才准。账户名也可以在这里改。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(setupAccounts, id: \.id) { account in
+                VStack(spacing: 8) {
+                    HStack(spacing: Theme.Spacing.s) {
+                        BankMarkView(
+                            bankId: account.bankId,
+                            fallbackEmoji: account.iconEmoji,
+                            fallbackColorHex: account.colorHex,
+                            size: 28
+                        )
+                        TextField("账户名", text: nameBinding(account))
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    HStack {
+                        Text("期初余额")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("0.00", text: balanceBinding(account))
+                            .keyboardType(.numbersAndPunctuation)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+                .padding(Theme.Spacing.m)
+                .cardStyle(radius: 12)
+            }
+
+            Button {
+                showAddAccount = true
+            } label: {
+                Label("添加其他账户", systemImage: "plus.circle")
+                    .font(.subheadline)
+            }
+        }
+    }
+
+    private var setupAccounts: [Account] {
+        accounts
+            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private func nameBinding(_ account: Account) -> Binding<String> {
+        Binding(
+            get: { account.name },
+            set: { value in
+                account.name = value
+                account.updatedAt = Date()
+                try? context.save()
+            }
+        )
+    }
+
+    private func balanceBinding(_ account: Account) -> Binding<String> {
+        Binding(
+            get: { Money.rawText(account.openingBalanceMinor) },
+            set: { text in
+                guard let value = Money.parse(text) else { return }
+                account.openingBalanceMinor = value
+                account.cachedBalanceMinor = value
+                account.updatedAt = Date()
+                try? context.save()
+            }
+        )
     }
 
     private var creditSettings: some View {
@@ -189,7 +266,7 @@ struct OnboardingView: View {
             Button {
                 advance()
             } label: {
-                Text(step == 3 ? "开始记账" : "下一步")
+                Text(step == 4 ? "开始记账" : "下一步")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -202,7 +279,7 @@ struct OnboardingView: View {
         if step == 1 {
             createAccounts()
         }
-        if step == 3 {
+        if step == 4 {
             finishOnboarding()
             return
         }
