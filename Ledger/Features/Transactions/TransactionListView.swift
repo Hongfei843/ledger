@@ -23,7 +23,14 @@ struct TransactionListView: View {
     @State private var showCustomRange = false
     @State private var customStart = Date()
     @State private var customEnd = Date()
-    @State private var toast: String?
+    @State private var toast: ToastState?
+    @State private var toastAction: (() -> Void)?
+    @State private var deletedBuffer: [Txn] = []
+
+    private struct ToastState: Equatable {
+        let message: String
+        let actionTitle: String?
+    }
 
     private var activeTxns: [Txn] { allTxns }
     private var interval: DateInterval { period.interval() }
@@ -158,19 +165,27 @@ struct TransactionListView: View {
             }
             .overlay(alignment: .top) {
                 if let toast {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(Theme.income)
-                        Text(toast)
+                    HStack(spacing: 8) {
+                        Image(systemName: toast.actionTitle == nil ? "checkmark.circle.fill" : "trash.circle.fill")
+                            .foregroundStyle(toast.actionTitle == nil ? Theme.income : Theme.warning)
+                        Text(toast.message)
                             .font(.subheadline.weight(.medium))
+                        if let title = toast.actionTitle {
+                            Divider().frame(height: 16)
+                            Button(title) {
+                                toastAction?()
+                                dismissToast()
+                            }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.accent)
+                        }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(.regularMaterial, in: Capsule())
-                    .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                    .shadow(color: .black.opacity(0.10), radius: 10, y: 3)
                     .padding(.top, 6)
                     .transition(.move(edge: .top).combined(with: .opacity))
-                    .allowsHitTesting(false)
                 }
             }
             .navigationTitle("明细")
@@ -186,7 +201,9 @@ struct TransactionListView: View {
             }
             .sheet(isPresented: $showEntry) {
                 EntrySheet { message in
-                    showToast(message)
+                    showToast(message, actionTitle: "再记一笔") {
+                        showEntry = true
+                    }
                 }
                 .presentationDetents([.large])
             }
@@ -281,24 +298,59 @@ struct TransactionListView: View {
     // MARK: - 汇总
 
     private var monthSummaryCard: some View {
-        HStack(alignment: .lastTextBaseline, spacing: Theme.Spacing.l) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("\(period.kind.summaryLabel)支出")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text(Money.format(periodExpense))
-                    .font(.system(size: 26, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+        VStack(spacing: Theme.Spacing.m) {
+            HStack(alignment: .lastTextBaseline, spacing: Theme.Spacing.l) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(period.kind.summaryLabel)支出")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text(Money.format(periodExpense))
+                        .font(.system(size: 26, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                Spacer(minLength: Theme.Spacing.s)
+                summaryItem(title: "收入", value: Money.format(periodIncome), color: Theme.income)
+                summaryItem(title: "结余", value: Money.format(periodIncome - periodExpense), color: .primary)
             }
-            Spacer(minLength: Theme.Spacing.s)
-            summaryItem(title: "收入", value: Money.format(periodIncome), color: Theme.income)
-            summaryItem(title: "结余", value: Money.format(periodIncome - periodExpense), color: .primary)
+
+            Divider()
+
+            NavigationLink {
+                AssetOverviewView()
+            } label: {
+                HStack(spacing: 4) {
+                    Text("净资产")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(Money.format(netWorthMinor))
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(netWorthMinor < 0 ? Theme.danger : .primary)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, Theme.Spacing.l)
-        .padding(.vertical, Theme.Spacing.m)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .cardStyle(padding: Theme.Spacing.l)
+    }
+
+    /// 资产为正、负债为负，直接相加即净资产
+    private var netWorthMinor: Int64 {
+        accounts
+            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .reduce(Int64(0)) { partial, account in
+                partial + BalanceService.balance(
+                    of: account,
+                    transactions: activeTxns,
+                    openingBalanceMinor: account.openingBalanceMinor
+                )
+            }
     }
 
     private func summaryItem(title: String, value: String, color: Color) -> some View {
@@ -391,16 +443,22 @@ struct TransactionListView: View {
         }
     }
 
-    private func showToast(_ message: String) {
+    private func showToast(_ message: String, actionTitle: String? = nil, duration: Double = 1.8, action: (() -> Void)? = nil) {
+        toastAction = action
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            toast = message
+            toast = ToastState(message: message, actionTitle: actionTitle)
         }
         Task {
-            try? await Task.sleep(nanoseconds: 1_600_000_000)
-            withAnimation(.easeOut(duration: 0.25)) {
-                toast = nil
-            }
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            dismissToast()
         }
+    }
+
+    private func dismissToast() {
+        withAnimation(.easeOut(duration: 0.22)) {
+            toast = nil
+        }
+        toastAction = nil
     }
 
     private func category(for txn: Txn) -> Category? {
@@ -412,17 +470,38 @@ struct TransactionListView: View {
     }
 
     private func delete(at offsets: IndexSet, in group: DayGroup) {
+        var removed: [Txn] = []
         for index in offsets {
             let txn = group.items[index]
             txn.deletedAt = Date()
             txn.updatedAt = Date()
+            removed.append(txn)
         }
         try? context.save()
+        refreshBalances()
 
+        deletedBuffer = removed
+        Haptics.warning()
+        showToast("已删除 \(removed.count) 条", actionTitle: "撤销", duration: 5) {
+            restoreDeleted()
+        }
+    }
+
+    private func restoreDeleted() {
+        for txn in deletedBuffer {
+            txn.deletedAt = nil
+            txn.updatedAt = Date()
+        }
+        deletedBuffer = []
+        try? context.save()
+        refreshBalances()
+        Haptics.success()
+    }
+
+    private func refreshBalances() {
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         BalanceService.refreshAll(accounts: accounts, transactions: all)
         try? context.save()
-        Haptics.warning()
     }
 }
 

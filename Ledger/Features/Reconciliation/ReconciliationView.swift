@@ -11,6 +11,8 @@ struct ReconciliationView: View {
     @State private var inputs: [UUID: String] = [:]
     @State private var message: String?
 
+    @Query(sort: \ReconciliationRun.createdAt, order: .reverse) private var runs: [ReconciliationRun]
+
     private var liveAccounts: [Account] {
         accounts
             .filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
@@ -77,6 +79,31 @@ struct ReconciliationView: View {
                     Text(message)
                         .font(.caption)
                         .foregroundStyle(Theme.income)
+                }
+            }
+
+            if !runs.isEmpty {
+                Section {
+                    ForEach(runs.prefix(5), id: \.id) { run in
+                        HStack {
+                            Text(DateFormatter.ledgerDateTime.string(from: run.createdAt))
+                                .font(.subheadline)
+                            Spacer()
+                            if run.diffCount == 0 {
+                                Text("全部一致")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.income)
+                            } else {
+                                Text("\(run.diffCount) 处差异 · \(Money.format(run.totalDiffMinor))")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.warning)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("最近对账")
+                } footer: {
+                    Text("每次保存校准都会留一条记录，方便回头查「这个月账到底差了多少」。")
                 }
             }
         }
@@ -149,10 +176,13 @@ struct ReconciliationView: View {
 
     private func applyAll() {
         var adjusted = 0
+        var diffTotal: Int64 = 0
+        var checkedCount = 0
         let now = Date()
 
         for account in liveAccounts {
             guard let text = inputs[account.id], let actual = Money.parse(text) else { continue }
+            checkedCount += 1
             let current = BalanceService.balance(
                 of: account,
                 transactions: liveTxns,
@@ -169,9 +199,21 @@ struct ReconciliationView: View {
                 )
                 context.insert(txn)
                 adjusted += 1
+                diffTotal += abs(delta)
             }
             account.lastReconciledAt = now
             account.updatedAt = now
+        }
+
+        if checkedCount > 0 {
+            let bookId = liveAccounts.first?.bookId ?? UUID()
+            let run = ReconciliationRun(
+                bookId: bookId,
+                accountCount: checkedCount,
+                diffCount: adjusted,
+                totalDiffMinor: diffTotal
+            )
+            context.insert(run)
         }
 
         try? context.save()

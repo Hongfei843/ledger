@@ -62,9 +62,9 @@ Ledger/                                   # 仓库根
 │  │  └─ NotificationService.swift        # 还款/对账本地通知
 │  │
 │  ├─ Data/
-│  │  ├─ Models/                          # 11 个 @Model
+│  │  ├─ Models/                          # 12 个 @Model
 │  │  │  Account / Category / Txn / Claim / Loan / LoanScheduleItem
-│  │  │  Statement / Book / MerchantRule / CaptureRecord / RecurringRule
+│  │  │  Statement / Book / MerchantRule / CaptureRecord / RecurringRule / ReconciliationRun
 │  │  └─ Store/
 │  │     ├─ ModelContainerFactory.swift   # Schema 注册；失败返回 nil 不崩溃
 │  │     ├─ SeedData.swift                # 初始分类 + 版本化迁移（零食→餐饮）

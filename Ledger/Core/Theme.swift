@@ -88,8 +88,7 @@ extension Color {
 }
 
 extension UIColor {
-    convenience init(hex: UInt32) {
-        self.init(
+    convenience init(hex: UInt32) {        self.init(
             red: CGFloat((hex >> 16) & 0xFF) / 255.0,
             green: CGFloat((hex >> 8) & 0xFF) / 255.0,
             blue: CGFloat(hex & 0xFF) / 255.0,
@@ -116,5 +115,32 @@ extension UIColor {
             blue: b + (1 - b) * t,
             alpha: a
         )
+    }
+}
+
+// MARK: - 统一样式
+
+extension View {
+    /// 统一卡片：动态背景 + 极细描边（深色下靠描边区分层次，而不是阴影）
+    func cardStyle(radius: CGFloat = Theme.Radius.card, padding: CGFloat? = nil) -> some View {
+        modifier(CardStyleModifier(radius: radius, padding: padding))
+    }
+}
+
+private struct CardStyleModifier: ViewModifier {
+    let radius: CGFloat
+    let padding: CGFloat?
+
+    func body(content: Content) -> some View {
+        content
+            .padding(padding ?? 0)
+            .background(
+                Theme.cardBackground,
+                in: RoundedRectangle(cornerRadius: radius, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+            )
     }
 }
