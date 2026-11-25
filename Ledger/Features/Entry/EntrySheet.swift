@@ -34,6 +34,7 @@ struct EntrySheet: View {
     @Query private var categories: [Category]
     @Query private var books: [Book]
     @Query private var claims: [Claim]
+    @Query private var templates: [QuickTemplate]
     @Query private var allTxns: [Txn]
 
     @State private var amountText = "0"
@@ -48,6 +49,8 @@ struct EntrySheet: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var isRecognizing = false
     @State private var ocrHint: String?
+    @State private var showSaveTemplate = false
+    @State private var templateName = ""
 
     /// 传入已有流水表示编辑模式；onSaved 用于父视图展示保存反馈
     private let editingTxn: Txn?
@@ -135,6 +138,10 @@ struct EntrySheet: View {
                 typePicker
                 amountDisplay
 
+                if selectedType != .transfer, !activeTemplates.isEmpty {
+                    templateStrip
+                }
+
                 if selectedType == .transfer {
                     transferSection
                 } else {
@@ -162,12 +169,31 @@ struct EntrySheet: View {
                     }
                     .accessibilityLabel("从截图识别")
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            templateName = defaultTemplateName()
+                            showSaveTemplate = true
+                        } label: {
+                            Label("保存为常用组合", systemImage: "bolt.badge.plus")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
             }
             .onChange(of: photoItem) { _, item in
                 guard let item else { return }
                 Task { await recognize(item) }
             }
             .onAppear(perform: prepareDefaults)
+            .alert("保存为常用组合", isPresented: $showSaveTemplate) {
+                TextField("名称，如 星巴克拿铁", text: $templateName)
+                Button("保存") { saveAsTemplate() }
+                Button("取消", role: .cancel) { templateName = "" }
+            } message: {
+                Text("会记住当前类型、金额、账户、分类、商家和备注，下次一键套用。")
+            }
             .task {
                 // 统计频次放到渲染之后，避免打开面板时卡顿
                 var counts: [UUID: Int] = [:]
@@ -189,9 +215,12 @@ struct EntrySheet: View {
         .pickerStyle(.segmented)
         .padding(.horizontal, Theme.Spacing.l)
         .padding(.top, Theme.Spacing.m)
-        .onChange(of: selectedType) { _, newValue in
-            selectedCategoryId = filteredCategories.first?.id
-            if newValue == .income, let current = selectedAccountId,
+        .onChange(of: selectedType) { _, _ in
+            // 只在当前分类不适用新类型时才重置，套用「常用组合」时不会被覆盖
+            if !filteredCategories.contains(where: { $0.id == selectedCategoryId }) {
+                selectedCategoryId = filteredCategories.first?.id
+            }
+            if selectedType == .income, let current = selectedAccountId,
                !filteredAccounts.contains(where: { $0.id == current }) {
                 selectedAccountId = filteredAccounts.first?.id
             }
@@ -417,6 +446,111 @@ struct EntrySheet: View {
         .padding(.top, Theme.Spacing.s)
         .padding(.bottom, Theme.Spacing.l)
         .background(.regularMaterial)
+    }
+
+    // MARK: - 常用组合
+
+    private var activeTemplates: [QuickTemplate] {
+        templates
+            .filter { $0.deletedAt == nil }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    private var templateStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Theme.Spacing.s) {
+                ForEach(activeTemplates, id: \.id) { template in
+                    Button {
+                        applyTemplate(template)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 9))
+                            Text(template.name)
+                                .font(.caption2)
+                                .lineLimit(1)
+                            if let amount = template.amountMinor, amount > 0 {
+                                Text(Money.format(amount))
+                                    .font(.caption2.weight(.medium))
+                                    .monospacedDigit()
+                            }
+                        }
+                        .padding(.horizontal, Theme.Spacing.m)
+                        .padding(.vertical, 6)
+                        .background(Theme.accent.opacity(0.10), in: Capsule())
+                        .foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.l)
+        }
+        .padding(.top, Theme.Spacing.xs)
+    }
+
+    private func applyTemplate(_ template: QuickTemplate) {
+        guard let selection = QuickTemplateService.selection(from: template, accounts: accounts, categories: categories) else { return }
+
+        if selection.type == .transfer {
+            selectedType = .transfer
+            if let accountId = selection.accountId,
+               filteredAccounts.contains(where: { $0.id == accountId }) {
+                selectedAccountId = accountId
+            }
+            Haptics.selection()
+            return
+        }
+
+        selectedType = selection.type
+        if let amount = selection.amountMinor {
+            amountText = Money.rawText(amount)
+        }
+        if let accountId = selection.accountId,
+           filteredAccounts.contains(where: { $0.id == accountId }) {
+            selectedAccountId = accountId
+        }
+        if let categoryId = selection.categoryId,
+           filteredCategories.contains(where: { $0.id == categoryId }) {
+            selectedCategoryId = categoryId
+        }
+        payee = selection.payee ?? ""
+        note = selection.note ?? ""
+        Haptics.selection()
+    }
+
+    private func defaultTemplateName() -> String {
+        var parts: [String] = []
+        if let category = filteredCategories.first(where: { $0.id == selectedCategoryId }) {
+            parts.append(category.name)
+        } else if selectedType == .transfer {
+            parts.append("转账")
+        }
+        if !payee.isEmpty { parts.append(payee) }
+        if parts.isEmpty, let account = filteredAccounts.first(where: { $0.id == selectedAccountId }) {
+            parts.append(account.name)
+        }
+        return parts.isEmpty ? "常用组合" : parts.joined(separator: " · ")
+    }
+
+    private func saveAsTemplate() {
+        let trimmed = templateName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = trimmed.isEmpty ? defaultTemplateName() : trimmed
+        let nextOrder = ((templates.map { $0.sortOrder }.max()) ?? 0) + 1
+        let template = QuickTemplate(
+            bookId: books.first?.id ?? UUID(),
+            name: name,
+            type: selectedType,
+            amountMinor: amountMinor > 0 ? amountMinor : nil,
+            accountId: selectedAccountId,
+            categoryId: selectedType == .transfer ? nil : selectedCategoryId,
+            payee: payee.isEmpty ? nil : payee,
+            note: note.isEmpty ? nil : note,
+            sortOrder: nextOrder
+        )
+        context.insert(template)
+        try? context.save()
+        Haptics.success()
+        templateName = ""
     }
 
     // MARK: - 逻辑

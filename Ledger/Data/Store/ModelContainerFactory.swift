@@ -13,6 +13,7 @@ enum ModelContainerFactory {
         Statement.self,
         ReconciliationRun.self,
         Debt.self,
+        QuickTemplate.self,
         MerchantRule.self,
         CaptureRecord.self,
         RecurringRule.self

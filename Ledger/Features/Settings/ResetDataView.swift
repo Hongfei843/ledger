@@ -88,6 +88,7 @@ struct ResetDataView: View {
             try context.delete(model: LoanScheduleItem.self)
             try context.delete(model: RecurringRule.self)
             try context.delete(model: Debt.self)
+            try context.delete(model: QuickTemplate.self)
             try context.delete(model: ReconciliationRun.self)
             try context.delete(model: Account.self)
             try context.delete(model: Category.self)

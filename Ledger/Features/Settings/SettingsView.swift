@@ -57,6 +57,9 @@ struct SettingsView: View {
                     NavigationLink("周期记账") {
                         RecurringListView()
                     }
+                    NavigationLink("常用组合") {
+                        QuickTemplateListView()
+                    }
                     NavigationLink("借入借出") {
                         DebtListView()
                     }
