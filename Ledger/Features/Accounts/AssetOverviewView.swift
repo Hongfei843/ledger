@@ -50,7 +50,7 @@ struct AssetOverviewView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Text(Money.format(netWorth))
-                        .font(.system(size: 32, weight: .semibold, design: .rounded))
+                        .font(.system(size: 28, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(netWorth < 0 ? Theme.danger : .primary)
 

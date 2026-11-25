@@ -81,7 +81,7 @@ struct LoanListView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("总负债").font(.caption2).foregroundStyle(.secondary)
                 Text(Money.format(totalDebtMinor))
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
