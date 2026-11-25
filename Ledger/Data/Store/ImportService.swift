@@ -119,8 +119,53 @@ enum ImportService {
         return summary
     }
 
-    static func inferAccountType(from name: String) -> AccountType {
-        if name.contains("信用卡") { return .credit }
+    /// 补录「账单里有、App 里没有」的行
+    @discardableResult
+    static func importBillRows(
+        _ rows: [BillRow],
+        accountId: UUID,
+        bookId: UUID,
+        categoryId: UUID?,
+        context: ModelContext
+    ) -> Int {
+        let existing = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
+        var knownExternalIds = Set(existing.compactMap { $0.externalId })
+        var inserted = 0
+
+        for row in rows {
+            if let externalId = row.externalId, knownExternalIds.contains(externalId) {
+                continue
+            }
+            let txn = Txn(
+                bookId: bookId,
+                type: row.isIncome ? .income : .expense,
+                amountMinor: row.amountMinor,
+                accountId: accountId,
+                occurredAt: row.occurredAt,
+                categoryId: categoryId,
+                payee: row.counterparty,
+                note: row.subject,
+                source: .imported
+            )
+            txn.externalId = row.externalId
+            context.insert(txn)
+            if let externalId = row.externalId {
+                knownExternalIds.insert(externalId)
+            }
+            inserted += 1
+        }
+
+        try? context.save()
+
+        let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        let allTxns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
+        BalanceService.refreshAll(accounts: accounts, transactions: allTxns)
+        try? context.save()
+
+        return inserted
+    }
+
+    static func inferAccountType(from name: String) -> AccountType {        if name.contains("信用卡") { return .credit }
         if name.contains("花呗") || name.contains("白条") { return .bnpl }
         if name.contains("支付宝") || name.contains("微信") || name.contains("零钱") { return .ewallet }
         if name.contains("现金") { return .cash }

@@ -47,6 +47,9 @@ struct SettingsView: View {
                     NavigationLink("导入账单") {
                         ImportView()
                     }
+                    NavigationLink("账单比对") {
+                        BillCompareView()
+                    }
                     NavigationLink("导出分析包") {
                         ExportView()
                     }
