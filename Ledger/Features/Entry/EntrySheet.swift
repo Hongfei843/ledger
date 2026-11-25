@@ -188,14 +188,48 @@ struct EntrySheet: View {
 
     private var categoryGrid: some View {
         ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: Theme.Spacing.s) {
-                ForEach(filteredCategories, id: \.id) { category in
-                    categoryCell(category)
+            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+                sectionTitle("常用")
+                categoryGridContent(frequentCategories)
+
+                if !remainingCategories.isEmpty {
+                    sectionTitle("全部")
+                    categoryGridContent(remainingCategories)
                 }
             }
             .padding(.horizontal, Theme.Spacing.l)
         }
-        .frame(maxHeight: 280)
+        .frame(maxHeight: 300)
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .padding(.top, 2)
+    }
+
+    private func categoryGridContent(_ items: [Category]) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: Theme.Spacing.s) {
+            ForEach(items, id: \.id) { category in
+                categoryCell(category)
+            }
+        }
+    }
+
+    /// 常用：按历史使用频次取前 8 个；都没用过就取默认前 8 个
+    private var frequentCategories: [Category] {
+        let counts = usageCounts
+        let used = filteredCategories
+            .filter { (counts[$0.id] ?? 0) > 0 }
+            .sorted { (counts[$0.id] ?? 0) > (counts[$1.id] ?? 0) }
+        let top = Array(used.prefix(8))
+        return top.isEmpty ? Array(filteredCategories.prefix(8)) : top
+    }
+
+    private var remainingCategories: [Category] {
+        let ids = Set(frequentCategories.map { $0.id })
+        return filteredCategories.filter { !ids.contains($0.id) }
     }
 
     private func categoryCell(_ category: Category) -> some View {

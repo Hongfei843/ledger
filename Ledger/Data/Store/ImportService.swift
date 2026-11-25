@@ -6,10 +6,16 @@ struct ImportSummary {
     var skippedDuplicate: Int = 0
     var skippedInvalid: Int = 0
     var categoriesCreated: Int = 0
+    var categoriesMatched: Int = 0
     var accountsCreated: Int = 0
 
     var description: String {
-        "导入 \(inserted) 条，重复跳过 \(skippedDuplicate) 条，无效 \(skippedInvalid) 条"
+        var parts = ["导入 \(inserted) 条"]
+        if categoriesMatched > 0 { parts.append("\(categoriesMatched) 类自动归类") }
+        if categoriesCreated > 0 { parts.append("新建 \(categoriesCreated) 类") }
+        if skippedDuplicate > 0 { parts.append("重复跳过 \(skippedDuplicate) 条") }
+        if skippedInvalid > 0 { parts.append("无效 \(skippedInvalid) 条") }
+        return parts.joined(separator: "，")
     }
 }
 
@@ -20,7 +26,8 @@ enum ImportService {
         records: [CookieRecord],
         defaultAccountId: UUID,
         bookId: UUID,
-        context: ModelContext
+        context: ModelContext,
+        autoMatchCategories: Bool = true
     ) -> ImportSummary {
         var summary = ImportSummary()
 
@@ -54,6 +61,12 @@ enum ImportService {
             let category: Category
             if let existing = categoryIndex[categoryKey] {
                 category = existing
+            } else if autoMatchCategories,
+                      let matched = CategoryMatcher.match(name: record.primaryCategory, kind: kind, categories: allCategories) {
+                // 外部叫法（美食 / App 订阅 / 电费）落到已有分类，避免分类表膨胀
+                category = matched
+                categoryIndex[categoryKey] = matched
+                summary.categoriesMatched += 1
             } else {
                 let created = Category(
                     bookId: bookId,
