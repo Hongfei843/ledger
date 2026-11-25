@@ -25,11 +25,13 @@ struct EntrySheet: View {
     @State private var isRecognizing = false
     @State private var ocrHint: String?
 
-    /// 传入已有流水表示编辑模式
+    /// 传入已有流水表示编辑模式；onSaved 用于父视图展示保存反馈
     private let editingTxn: Txn?
+    private let onSaved: ((String) -> Void)?
 
-    init(editingTxn: Txn? = nil) {
+    init(editingTxn: Txn? = nil, onSaved: ((String) -> Void)? = nil) {
         self.editingTxn = editingTxn
+        self.onSaved = onSaved
         _amountText = State(initialValue: editingTxn.map { Money.rawText($0.amountMinor) } ?? "0")
         _selectedType = State(initialValue: editingTxn?.type ?? .expense)
         _selectedCategoryId = State(initialValue: editingTxn?.categoryId)
@@ -383,6 +385,10 @@ struct EntrySheet: View {
         try? context.save()
         refreshBalances()
         Haptics.success()
+
+        let categoryName = filteredCategories.first { $0.id == selectedCategoryId }?.name ?? "已记录"
+        onSaved?("\(categoryName) \(Money.format(amountMinor))")
+
         dismiss()
     }
 

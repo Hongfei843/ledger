@@ -23,6 +23,7 @@ struct TransactionListView: View {
     @State private var showCustomRange = false
     @State private var customStart = Date()
     @State private var customEnd = Date()
+    @State private var toast: String?
 
     private var activeTxns: [Txn] { allTxns }
     private var interval: DateInterval { period.interval() }
@@ -155,6 +156,23 @@ struct TransactionListView: View {
                 .padding(.trailing, Theme.Spacing.xl)
                 .padding(.bottom, Theme.Spacing.xxl)
             }
+            .overlay(alignment: .top) {
+                if let toast {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Theme.income)
+                        Text(toast)
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(.regularMaterial, in: Capsule())
+                    .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                    .padding(.top, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .allowsHitTesting(false)
+                }
+            }
             .navigationTitle("明细")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -167,8 +185,10 @@ struct TransactionListView: View {
                 }
             }
             .sheet(isPresented: $showEntry) {
-                EntrySheet()
-                    .presentationDetents([.large])
+                EntrySheet { message in
+                    showToast(message)
+                }
+                .presentationDetents([.large])
             }
             .sheet(isPresented: $showCustomRange) {
                 customRangeSheet
@@ -349,14 +369,38 @@ struct TransactionListView: View {
 
     private var emptyState: some View {
         VStack(spacing: Theme.Spacing.m) {
-            Text("\(period.title())没有记录")
+            Text("\(greeting)，这里还空着")
                 .font(.headline)
-            Text("点右下角的 + 记一笔")
+            Text("点右下角的 + 记第一笔")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Theme.Spacing.xxl)
+    }
+
+    /// 按当前时段打招呼（借鉴 Cookie 的时间感知设计）
+    private var greeting: String {
+        let hour = AppCalendar.gregorian.component(.hour, from: Date())
+        switch hour {
+        case 5..<11: return "早上好"
+        case 11..<13: return "中午好"
+        case 13..<18: return "下午好"
+        case 18..<23: return "晚上好"
+        default: return "夜深了"
+        }
+    }
+
+    private func showToast(_ message: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            toast = message
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            withAnimation(.easeOut(duration: 0.25)) {
+                toast = nil
+            }
+        }
     }
 
     private func category(for txn: Txn) -> Category? {
