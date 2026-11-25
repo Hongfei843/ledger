@@ -85,8 +85,11 @@ enum BillCSVParser {
         }
 
         let headerText = headers.joined()
-        let source: BillSource = headerText.contains("支付宝") ? .alipay
-            : (headerText.contains("微信") ? .wechat : .generic)
+        // 来源标识常出现在文件抬头的说明行里，不能只看表头
+        let probe = raw
+        let source: BillSource = probe.contains("支付宝") ? .alipay
+            : (probe.contains("微信") ? .wechat : .generic)
+        _ = headerText
 
         var rows: [BillRow] = []
         var skipped = 0
