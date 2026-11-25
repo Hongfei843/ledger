@@ -79,13 +79,10 @@ enum NotificationService {
             content.body = "记得登记本期账单金额，再核对一下 App 算的对不对。"
             content.sound = .default
 
-            let trigger = UNCalendarNotificationTrigger(
-                dateMatching: calendar.dateComponents([.year, .month, .day], from: fire).merging(
-                    DateComponents(hour: 9, minute: 0),
-                    uniquingKeysWith: { $1 }
-                ),
-                repeats: false
-            )
+            var comps = calendar.dateComponents([.year, .month, .day], from: fire)
+            comps.hour = 9
+            comps.minute = 0
+            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
             UNUserNotificationCenter.current().add(
                 UNNotificationRequest(identifier: "bill-\(account.id.uuidString)", content: content, trigger: trigger)
             )
