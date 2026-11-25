@@ -3,6 +3,29 @@ import SwiftData
 import PhotosUI
 import UIKit
 
+/// 外部（截图识别 / 快捷指令 / 相册）带进来的预填值
+struct EntrySheetPrefill {
+    var amountMinor: Int64?
+    var payee: String?
+    var note: String?
+    var occurredAt: Date?
+    var hint: String?
+}
+
+extension EntrySheetPrefill {
+    init(draft: ScreenshotImportDraft) {
+        let hint: String
+        if draft.amountMinor == nil {
+            hint = "没识别出金额，请手动输入"
+        } else if draft.confidence < 0.6 {
+            hint = "截图识别置信度较低，请核对金额"
+        } else {
+            hint = "已从截图识别，请核对"
+        }
+        self.init(amountMinor: draft.amountMinor, payee: draft.payee, note: nil, occurredAt: nil, hint: hint)
+    }
+}
+
 struct EntrySheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -30,18 +53,29 @@ struct EntrySheet: View {
     private let editingTxn: Txn?
     private let onSaved: ((String) -> Void)?
 
-    init(editingTxn: Txn? = nil, onSaved: ((String) -> Void)? = nil) {
+    init(editingTxn: Txn? = nil, prefill: EntrySheetPrefill? = nil, onSaved: ((String) -> Void)? = nil) {
         self.editingTxn = editingTxn
         self.onSaved = onSaved
-        _amountText = State(initialValue: editingTxn.map { Money.rawText($0.amountMinor) } ?? "0")
+
+        let initialAmount: String
+        if let editingTxn {
+            initialAmount = Money.rawText(editingTxn.amountMinor)
+        } else if let prefillAmount = prefill?.amountMinor, prefillAmount > 0 {
+            initialAmount = Money.rawText(prefillAmount)
+        } else {
+            initialAmount = "0"
+        }
+
+        _amountText = State(initialValue: initialAmount)
         _selectedType = State(initialValue: editingTxn?.type ?? .expense)
         _selectedCategoryId = State(initialValue: editingTxn?.categoryId)
         _selectedAccountId = State(initialValue: editingTxn?.accountId)
         _counterAccountId = State(initialValue: editingTxn?.counterAccountId)
-        _note = State(initialValue: editingTxn?.note ?? "")
-        _payee = State(initialValue: editingTxn?.payee ?? "")
-        _occurredAt = State(initialValue: editingTxn?.occurredAt ?? Date())
+        _note = State(initialValue: editingTxn?.note ?? prefill?.note ?? "")
+        _payee = State(initialValue: editingTxn?.payee ?? prefill?.payee ?? "")
+        _occurredAt = State(initialValue: editingTxn?.occurredAt ?? prefill?.occurredAt ?? Date())
         _isReimbursable = State(initialValue: editingTxn?.isReimbursable ?? false)
+        _ocrHint = State(initialValue: editingTxn == nil ? prefill?.hint : nil)
     }
 
     // MARK: - 数据

@@ -40,4 +40,13 @@ enum OCRService {
             DispatchQueue.main.async { completion(lines) }
         }
     }
+
+    /// async 包装：截图导入 / 快捷指令调用
+    static func recognize(_ image: UIImage) async -> [OCRLine] {
+        await withCheckedContinuation { continuation in
+            recognize(image) { lines in
+                continuation.resume(returning: lines)
+            }
+        }
+    }
 }

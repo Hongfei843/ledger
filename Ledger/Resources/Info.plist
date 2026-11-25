@@ -31,6 +31,19 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<!-- 让「文件」App 与系统分享面板能把 CSV 交给本应用打开（不需要扩展、不需要权限） -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.example.ledger</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ledger</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -46,6 +59,18 @@
 				<string>public.delimited-values-text</string>
 				<string>public.text</string>
 				<string>public.data</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>截图</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.image</string>
 			</array>
 		</dict>
 	</array>

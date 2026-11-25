@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 private struct DayGroup: Identifiable {
     let id: Date
@@ -29,6 +30,8 @@ struct TransactionListView: View {
     @State private var toast: ToastState?
     @State private var toastAction: (() -> Void)?
     @State private var deletedBuffer: [Txn] = []
+    @State private var screenshotItem: PhotosPickerItem?
+    @State private var isScreenshotBusy = false
 
     private struct ToastState: Equatable {
         let message: String
@@ -328,11 +331,37 @@ struct TransactionListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    PhotosPicker(selection: $screenshotItem, matching: .images, photoLibrary: .shared()) {
+                        if isScreenshotBusy {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "text.viewfinder")
+                        }
+                    }
+                    .disabled(isScreenshotBusy)
+                    .accessibilityLabel("截图识别记账")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
                         SearchView()
                     } label: {
                         Image(systemName: "magnifyingglass")
                     }
+                }
+            }
+            .onChange(of: screenshotItem) { _, item in
+                guard let item else { return }
+                isScreenshotBusy = true
+                Task {
+                    defer {
+                        isScreenshotBusy = false
+                        screenshotItem = nil
+                    }
+                    guard let data = try? await item.loadTransferable(type: Data.self),
+                          let draft = await ScreenshotImportService.makeDraft(fromImageData: data) else {
+                        return
+                    }
+                    ScreenshotImportStore.save(draft)
                 }
             }
             .sheet(isPresented: $showEntry) {

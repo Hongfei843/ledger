@@ -139,7 +139,7 @@ struct AccountDetailView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(Money.format(balance))
-                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .font(Theme.Fonts.amountXL)
                 .monospacedDigit()
                 .foregroundStyle(balance < 0 ? Theme.danger : .primary)
             if account.type.isCreditLike, let limit = account.creditLimitMinor {

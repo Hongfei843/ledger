@@ -87,7 +87,7 @@ struct ClaimListView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(Money.format(monthPendingMinor))
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(Theme.Fonts.amountL)
                 .monospacedDigit()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

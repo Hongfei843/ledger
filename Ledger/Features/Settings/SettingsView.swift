@@ -69,6 +69,9 @@ struct SettingsView: View {
                     NavigationLink("账单比对") {
                         BillCompareView()
                     }
+                    NavigationLink("截图记账") {
+                        ScreenshotGuideView()
+                    }
                     NavigationLink("导出分析包") {
                         ExportView()
                     }

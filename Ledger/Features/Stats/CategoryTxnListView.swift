@@ -28,7 +28,7 @@ struct CategoryTxnListView: View {
                     Text("合计").foregroundStyle(.secondary)
                     Spacer()
                     Text(Money.format(totalMinor))
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .font(Theme.Fonts.amountM)
                         .monospacedDigit()
                 }
                 HStack {

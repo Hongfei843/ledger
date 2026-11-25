@@ -13,7 +13,7 @@
 - 推送：`pwsh -File .gh/push.ps1 -Message "..."`
 - 构建：`pwsh -File .gh/ci.ps1`（会自动等结果并抓失败日志）
 - 令牌：`.gh/token.txt`（仓库外，7 天过期）
-- 测试：83 个用例，CI 每次真跑
+- 测试：92 个用例，CI 每次真跑
 - 最近绿色构建：2026-11-25 run 45607088924（`macos-15-intel`，83 测试全绿，含退款/借入借出）
 
 ## 1. 产品定位
@@ -23,7 +23,7 @@
 
 ## 2. 当前功能全景
 
-**记账**：支出/收入/转账；金额、分类、账户、日期、商家、备注、可报销；快捷日期（今天/昨天/前天）、记住上次账户与分类；右滑编辑、左滑删除（5 秒撤销）。
+**记账**：支出/收入/转账；金额、分类、账户、日期、商家、备注、可报销；快捷日期（今天/昨天/前天）、记住上次账户与分类；截图识别预填（快捷指令/操作按钮、相册、文件打开）；右滑编辑、左滑删除（5 秒撤销）。
 
 **首页**：日/周/月/年/自定义周期切换；收支双卡 + 结余/昨日/净资产；账户横滑卡；7 天内到期提醒；未对账提醒；搜索。
 
@@ -43,7 +43,7 @@
 
 **导入导出**：Cookie CSV 导入（自动归类）；支付宝/微信账单比对（漏记/多记）；AI 分析包（ZIP）；完整备份 JSON。
 
-**其他**：周期记账自动生成；借入借出（应收/应付跟踪）；截图 OCR；数据健康度；面容 ID 锁；隐私遮罩；四套可切换图标；一键初始化（倒计时 + 二次确认）。
+**其他**：周期记账自动生成；借入借出（应收/应付跟踪）；截图识别记账（本地 OCR，可接快捷指令/操作按钮）；数据健康度；面容 ID 锁；隐私遮罩；四套可切换图标；一键初始化（倒计时 + 二次确认）。
 
 ## 3. 页面结构
 
@@ -93,10 +93,10 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 - ⚠️ `macos-15-arm64` / `macos-26-arm64` 是镜像目录名，**不是合法标签**，写了 job 会永远排队
 - 2026-11 起 macOS 托管 runner 容量长期紧张（尤其 arm64）：job 排队后 `cancelled` 且 0 步执行 = 平台容量问题，不是编译失败；跑 `.gh/ci-race.ps1` 自动轮换标签重试并抓包
 
-## 6. 测试覆盖（83）
+## 6. 测试覆盖（92）
 
 Money、Balance、StatsEngine、LoanCalculator、CreditCardCycle、Statement、Debt、Refund、
-CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、RecurringEngine、
+ScreenshotImport、CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、RecurringEngine、
 ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 
 ## 7. 已知限制
@@ -105,7 +105,7 @@ ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 2. 无多账本 UI（模型有 bookId）
 3. 银行图标来自 Cookie 素材，上架前必须替换（见 `Resources/ASSETS_SOURCE.md`）
 4. 组合贷需手动录两笔
-5. OCR 只能从相册选图，未接捷径
+5. 快捷指令需要手动建一次（见「我的 → 截图记账」里的步骤），iOS 不允许 App 自动安装快捷指令
 6. 无预算、无二级分类
 7. 金额字号与卡片样式已在首页/统计/详情/借贷页统一（`Theme.Fonts`），报销/贷款等二级页面还在收尾
 8. 提前还款重算是 O(n²)，单次无感
@@ -113,12 +113,13 @@ ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 
 ## 8. 下一轮建议（按优先级）
 
-1. **二级页面收尾**：报销/贷款/导入页的字号与内边距统一到 `Theme.Fonts`。
-2. 常用组合一键复用（账户+分类+金额）。
-3. 搜索增强：按金额区间、账户、可报销筛选。
-4. 银行图标补地方银行（素材库有 300+ 家）。
-5. 小组件（需额外 target，自签会复杂）。
-6. 上架准备：换素材、隐私政策、CloudKit 同步（付费账号可用）。
+1. **分享扩展**：任意 App 里分享截图直接进轻账（需要新 extension target，自签时要确认重签包含 appex）。
+2. **App Intents / Siri**：需先验证 XcodeGen 工程的 App Intents metadata 生成，再接 Siri 与原生快捷指令动作。
+3. 常用组合一键复用（账户+分类+金额）。
+4. 搜索增强：按金额区间、账户、可报销筛选。
+5. 银行图标补地方银行（素材库有 300+ 家）。
+6. 小组件（需额外 target，自签会复杂）。
+7. 上架准备：换素材、隐私政策、CloudKit 同步（付费账号可用）。
 
 ## 9. 排查手册
 
@@ -133,7 +134,20 @@ ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 | 余额对不上 | 对账页 / 数据健康 |
 | 卡顿 | 避免 body 里遍历全表（已改两处：首页余额、分类计数） |
 
-## 10. 开新对话的开场话术
+## 10. 截图记账 / 快捷指令
+
+三条入口都走本地 OCR，图片不上传：
+
+1. **快捷指令 + 操作按钮（推荐，零权限）**
+   - 快捷指令 App → 新建： 「截屏」→「存储文件」（位置选 我的 iPhone → 轻账，关闭「询问保存位置」）→「打开 URL」填 `ledger://import-screenshot` → 命名
+   - 设置 → 操作按钮 → 快捷指令 → 选它；也可以放进控制中心/锁屏
+   - 付款页、账单页按操作按钮：截屏 → 自动打开预填的「记一笔」
+2. **分享 / 文件打开**：App 注册了 `public.image`，从相册分享或在文件 App 里点开截图 → 选轻账，直接识别
+3. **App 内相册**：明细页右上角取景框按钮
+
+实现：`OCR/ScreenshotInbox.swift`（收「轻账」目录最新截图）、`OCR/ScreenshotImportService.swift`（OCR→草稿）、`Domain/ScreenshotImportDraft.swift`（草稿存取、10 分钟过期）、`RootTabView`（URL 与 pending 草稿）、`EntrySheetPrefill`（预填；没识别出金额会让用户手填）。
+
+## 11. 开新对话的开场话术
 
 > 这是一个 iOS 记账 App（SwiftUI + SwiftData），代码在 GitHub 仓库 Hongfei843/ledger，
 > 本地在 D:\开发\记账App，用 GitHub Actions 出未签名 IPA。

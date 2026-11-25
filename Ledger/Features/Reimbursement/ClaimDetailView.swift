@@ -67,7 +67,7 @@ struct ClaimDetailView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Text(Money.format(totalMinor))
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        .font(Theme.Fonts.amountXL)
                         .monospacedDigit()
                     Text("\(items.count) 笔 · \(claim.periodMonth) · \(claim.status.displayName)")
                         .font(.caption2)

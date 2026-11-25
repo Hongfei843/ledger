@@ -50,7 +50,7 @@ struct AssetOverviewView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Text(Money.format(netWorth))
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        .font(Theme.Fonts.amountXL)
                         .monospacedDigit()
                         .foregroundStyle(netWorth < 0 ? Theme.danger : .primary)
 
@@ -88,7 +88,7 @@ struct AssetOverviewView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption2).foregroundStyle(.secondary)
             Text(value)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .font(Theme.Fonts.amountS)
                 .monospacedDigit()
                 .foregroundStyle(color)
         }

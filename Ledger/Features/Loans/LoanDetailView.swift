@@ -129,7 +129,7 @@ struct LoanDetailView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(Money.format(loan.outstandingPrincipalMinor))
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
+                .font(Theme.Fonts.amountXL)
                 .monospacedDigit()
             HStack(spacing: Theme.Spacing.l) {
                 infoItem("年利率", String(format: "%.2f%%", loan.annualRatePercent))

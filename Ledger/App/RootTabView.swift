@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Combine
 
 struct RootTabView: View {
     @Environment(\.modelContext) private var context
@@ -15,6 +16,10 @@ struct RootTabView: View {
 
     /// 从系统「分享到本应用」或「用其他应用打开」传进来的文件
     @State private var sharedFile: SharedFile?
+
+    /// 截图识别待确认的草稿（快捷指令 / 相册 / 文件导入）
+    @State private var importDraft: ScreenshotImportDraft?
+    @State private var importHint: String?
 
     var body: some View {
         TabView {
@@ -37,12 +42,27 @@ struct RootTabView: View {
         // 切换主题色时强制重建，让所有引用 Theme.accent 的视图立即生效
         .id(accentHex)
         .onOpenURL { url in
-            sharedFile = SharedFile(url: url)
+            handleIncomingURL(url)
         }
         .sheet(item: $sharedFile) { file in
             NavigationStack {
                 ImportView(initialFileURL: file.url)
             }
+        }
+        .sheet(item: $importDraft) { draft in
+            EntrySheet(prefill: EntrySheetPrefill(draft: draft))
+                .presentationDetents([.large])
+        }
+        .alert(
+            "截图导入",
+            isPresented: Binding(
+                get: { importHint != nil },
+                set: { if !$0 { importHint = nil } }
+            )
+        ) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(importHint ?? "")
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView()
@@ -64,6 +84,15 @@ struct RootTabView: View {
             if phase == .background {
                 unlocked = false
             }
+            if phase == .active {
+                takePendingScreenshotDraft()
+            }
+        }
+        .onChange(of: showOnboarding) { _, showing in
+            if !showing { takePendingScreenshotDraft() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .screenshotImportReady)) { _ in
+            takePendingScreenshotDraft()
         }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
@@ -72,6 +101,66 @@ struct RootTabView: View {
             if !onboardingCompleted {
                 showOnboarding = true
             }
+            // 快捷指令拉起 App 时，识别结果可能比 UI 晚一点点
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            takePendingScreenshotDraft()
+        }
+    }
+
+    // MARK: - 截图 / 文件入口
+
+    private func handleIncomingURL(_ url: URL) {
+        if url.scheme == "ledger" {
+            if url.host == "import-screenshot" {
+                importScreenshotFromInbox()
+            }
+            return
+        }
+
+        if url.isFileURL {
+            if ScreenshotInbox.isImageFile(url) {
+                importScreenshot(fromFileURL: url)
+                return
+            }
+            sharedFile = SharedFile(url: url)
+            return
+        }
+
+        sharedFile = SharedFile(url: url)
+    }
+
+    /// 快捷指令把截图存进「轻账」目录后，用 ledger://import-screenshot 触发
+    private func importScreenshotFromInbox() {
+        Task {
+            guard let found = ScreenshotInbox.latestImage() else {
+                importHint = "没找到刚保存的截图。\n在快捷指令里把截图「存储文件」到「我的 iPhone → 轻账」，再打开本应用。"
+                return
+            }
+            let draft = await ScreenshotImportService.makeDraft(from: found.image)
+            ScreenshotInbox.consume(found.url)
+            present(draft)
+        }
+    }
+
+    private func importScreenshot(fromFileURL url: URL) {
+        Task {
+            guard let draft = await ScreenshotImportService.makeDraft(fromFileURL: url) else {
+                importHint = "这张文件读不出来，换一张图片试试。"
+                return
+            }
+            present(draft)
+        }
+    }
+
+    private func present(_ draft: ScreenshotImportDraft) {
+        ScreenshotImportStore.clear()
+        importDraft = draft
+    }
+
+    private func takePendingScreenshotDraft() {
+        guard importDraft == nil, !showOnboarding else { return }
+        if let draft = ScreenshotImportStore.take() {
+            importDraft = draft
         }
     }
 }

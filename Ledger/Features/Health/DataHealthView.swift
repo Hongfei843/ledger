@@ -186,7 +186,7 @@ struct DataHealthView: View {
                             .stroke(scoreColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                             .rotationEffect(.degrees(-90))
                         Text("\(score)")
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .font(Theme.Fonts.amountL)
                             .monospacedDigit()
                     }
                     .frame(width: 72, height: 72)
