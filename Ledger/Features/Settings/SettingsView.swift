@@ -27,6 +27,9 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section("记账") {
+                    NavigationLink("账本管理") {
+                        BookManageView()
+                    }
                     NavigationLink("分类管理") {
                         CategoryManageView()
                     }
@@ -145,6 +148,7 @@ struct SettingsView: View {
 
                 Section("关于") {
                     LabeledContent("版本", value: appVersionText)
+                    LabeledContent("数据存储", value: "仅本机，不上传")
                 }
             }
             .navigationTitle("我的")

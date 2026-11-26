@@ -6,6 +6,7 @@ struct CategoryManageView: View {
     @Query private var categories: [Category]
     @Query private var books: [Book]
     @Query private var txns: [Txn]
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
 
     @State private var editing: Category?
     @State private var showNew = false
@@ -17,19 +18,19 @@ struct CategoryManageView: View {
 
     private var expense: [Category] {
         categories
-            .filter { $0.deletedAt == nil && !$0.isArchived && $0.kind == .expense }
+            .filter { $0.deletedAt == nil && !$0.isArchived && $0.kind == .expense && BookScope.matches($0.bookId, raw: currentBookRaw) }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private var income: [Category] {
         categories
-            .filter { $0.deletedAt == nil && !$0.isArchived && $0.kind == .income }
+            .filter { $0.deletedAt == nil && !$0.isArchived && $0.kind == .income && BookScope.matches($0.bookId, raw: currentBookRaw) }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private var archived: [Category] {
         categories
-            .filter { $0.deletedAt == nil && $0.isArchived }
+            .filter { $0.deletedAt == nil && $0.isArchived && BookScope.matches($0.bookId, raw: currentBookRaw) }
             .sorted { $0.name < $1.name }
     }
 
@@ -217,7 +218,7 @@ struct CategoryEditSheet: View {
             category.iconEmoji = emoji
             category.updatedAt = Date()
         } else {
-            let bookId = books.first?.id ?? UUID()
+            let bookId = BookScope.currentId ?? books.first?.id ?? UUID()
             let maxOrder = ((try? context.fetch(FetchDescriptor<Category>())) ?? []).map { $0.sortOrder }.max() ?? 0
             let created = Category(
                 bookId: bookId,

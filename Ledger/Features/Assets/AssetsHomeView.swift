@@ -8,13 +8,18 @@ struct AssetsHomeView: View {
     @Query private var loans: [Loan]
     @Query private var statements: [Statement]
     @Query private var debts: [Debt]
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
 
-    private var liveTxns: [Txn] { allTxns.filter { $0.deletedAt == nil } }
+    private func bookMatches(_ id: UUID) -> Bool { BookScope.matches(id, raw: currentBookRaw) }
+
+    private var liveTxns: [Txn] { allTxns.filter { $0.deletedAt == nil && bookMatches($0.bookId) } }
     private var liveAccounts: [Account] {
         accounts
-            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .filter { $0.deletedAt == nil && !$0.isArchived && bookMatches($0.bookId) }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
+    private var liveStatements: [Statement] { statements.filter { bookMatches($0.bookId) } }
+    private var liveDebts: [Debt] { debts.filter { $0.deletedAt == nil && bookMatches($0.bookId) } }
     private var balances: [UUID: Int64] {
         var map: [UUID: Int64] = [:]
         for account in liveAccounts {
@@ -35,7 +40,7 @@ struct AssetsHomeView: View {
 
     private var creditDebtMinor: Int64 {
         liveAccounts.filter { $0.type.isCreditLike }.reduce(Int64(0)) { partial, account in
-            guard let info = CreditCardBillService.info(for: account, txns: liveTxns, statements: statements) else {
+            guard let info = CreditCardBillService.info(for: account, txns: liveTxns, statements: liveStatements) else {
                 return partial
             }
             let amount = info.registered?.outstandingMinor ?? info.estimatedAmountMinor
@@ -45,12 +50,12 @@ struct AssetsHomeView: View {
 
     private var loanOutstandingMinor: Int64 {
         loans
-            .filter { $0.deletedAt == nil && $0.status == .active }
+            .filter { $0.deletedAt == nil && $0.status == .active && bookMatches($0.bookId) }
             .reduce(Int64(0)) { $0 + $1.outstandingPrincipalMinor }
     }
 
     private var debtSummary: (receivable: Int64, payable: Int64) {
-        DebtService.summary(debts)
+        DebtService.summary(liveDebts)
     }
 
     private var netWorthMinor: Int64 {
@@ -250,7 +255,7 @@ struct AssetsHomeView: View {
 
     private func accountSubtitle(_ account: Account) -> String {
         let balance = balances[account.id] ?? 0
-        if account.type.isCreditLike, let info = CreditCardBillService.info(for: account, txns: liveTxns, statements: statements) {
+        if account.type.isCreditLike, let info = CreditCardBillService.info(for: account, txns: liveTxns, statements: liveStatements) {
             let due = DateFormatter.ledgerShort.string(from: info.dueDate)
             if let statement = info.registered {
                 return "待还 \(Money.format(statement.outstandingMinor)) · \(due)"

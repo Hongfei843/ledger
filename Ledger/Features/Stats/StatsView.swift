@@ -6,15 +6,21 @@ struct StatsView: View {
     @Query(sort: \Txn.occurredAt, order: .reverse) private var allTxns: [Txn]
     @Query private var claims: [Claim]
     @Query private var categories: [Category]
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
 
     @State private var monthAnchor = Date()
     @State private var caliber: StatsCaliber = .personal
 
-    private var liveTxns: [Txn] { allTxns.filter { $0.deletedAt == nil } }
+    private var bookMatches: (UUID) -> Bool {
+        { BookScope.matches($0, raw: currentBookRaw) }
+    }
+    private var liveTxns: [Txn] { allTxns.filter { $0.deletedAt == nil && bookMatches($0.bookId) } }
+    private var liveClaims: [Claim] { claims.filter { bookMatches($0.bookId) } }
+    private var scopedCategories: [Category] { categories.filter { bookMatches($0.bookId) } }
     private var interval: DateInterval { AppCalendar.monthInterval(containing: monthAnchor) }
 
     private var summary: StatsSummary {
-        StatsEngine.summary(range: interval, caliber: caliber, txns: liveTxns, claims: claims)
+        StatsEngine.summary(range: interval, caliber: caliber, txns: liveTxns, claims: liveClaims)
     }
 
     private var slices: [CategorySlice] {
@@ -22,8 +28,8 @@ struct StatsView: View {
             range: interval,
             caliber: caliber,
             txns: liveTxns,
-            claims: claims,
-            categories: categories
+            claims: liveClaims,
+            categories: scopedCategories
         )
     }
 
@@ -191,8 +197,8 @@ struct StatsView: View {
         InsightEngine.generate(
             monthAnchor: monthAnchor,
             txns: liveTxns,
-            categories: categories,
-            claims: claims
+            categories: scopedCategories,
+            claims: liveClaims
         )
     }
 

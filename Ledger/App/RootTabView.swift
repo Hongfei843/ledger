@@ -119,6 +119,12 @@ struct RootTabView: View {
         }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
+            if BookScope.currentId == nil {
+                let books = (try? context.fetch(FetchDescriptor<Book>())) ?? []
+                if let book = books.first(where: { $0.isDefault }) ?? books.first {
+                    BookScope.setCurrent(book.id)
+                }
+            }
             if let pending = UserDefaults.standard.string(forKey: AppDelegate.pendingQuickActionKey) {
                 handleQuickAction(pending)
             }

@@ -5,17 +5,18 @@ struct AccountsView: View {
     @Environment(\.modelContext) private var context
     @Query private var accounts: [Account]
     @Query private var txns: [Txn]
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
     @State private var showAdd = false
     @State private var editingAccount: Account?
 
     private var activeAccounts: [Account] {
         accounts
-            .filter { $0.deletedAt == nil && !$0.isArchived }
+            .filter { $0.deletedAt == nil && !$0.isArchived && BookScope.matches($0.bookId, raw: currentBookRaw) }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private var liveTxns: [Txn] {
-        txns.filter { $0.deletedAt == nil }
+        txns.filter { $0.deletedAt == nil && BookScope.matches($0.bookId, raw: currentBookRaw) }
     }
 
     var body: some View {

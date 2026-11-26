@@ -102,6 +102,7 @@ struct ResetDataView: View {
 
         UserDefaults.standard.removeObject(forKey: "seed.categories.version")
         UserDefaults.standard.removeObject(forKey: "onboarding.completed")
+        BookScope.setCurrent(nil)
         SeedData.bootstrapIfNeeded(context: context)
 
         countdown = nil

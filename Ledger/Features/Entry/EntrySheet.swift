@@ -71,6 +71,7 @@ struct EntrySheet: View {
     @State private var accountUsage: [UUID: Int] = [:]
     @State private var balanceCache: [UUID: Int64] = [:]
     @State private var showAddDetectedAccount = false
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
 
     /// 传入已有流水表示编辑模式；onSaved 用于父视图展示保存反馈
     private let editingTxn: Txn?
@@ -105,8 +106,13 @@ struct EntrySheet: View {
 
     // MARK: - 数据
 
+    private var currentBookId: UUID? { UUID(uuidString: currentBookRaw) }
+    private func bookMatches(_ id: UUID) -> Bool { BookScope.matches(id, raw: currentBookRaw) }
+
     private var baseAccounts: [Account] {
-        let list = accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+        let list = accounts.filter {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && bookMatches($0.bookId)
+        }
         return AccountUsageService.orderedAccounts(list, usage: accountUsage)
     }
 
@@ -159,7 +165,7 @@ struct EntrySheet: View {
         let kind: CategoryKind = selectedType == .income ? .income : .expense
         let counts = usageCounts
         return categories
-            .filter { $0.deletedAt == nil && !$0.isArchived && $0.kind == kind }
+            .filter { $0.deletedAt == nil && !$0.isArchived && $0.kind == kind && bookMatches($0.bookId) }
             .sorted { lhs, rhs in
                 let left = counts[lhs.id] ?? 0
                 let right = counts[rhs.id] ?? 0
@@ -567,7 +573,7 @@ struct EntrySheet: View {
 
     private var activeTemplates: [QuickTemplate] {
         templates
-            .filter { $0.deletedAt == nil }
+            .filter { $0.deletedAt == nil && bookMatches($0.bookId) }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
@@ -652,7 +658,7 @@ struct EntrySheet: View {
         let name = trimmed.isEmpty ? defaultTemplateName() : trimmed
         let nextOrder = ((templates.map { $0.sortOrder }.max()) ?? 0) + 1
         let template = QuickTemplate(
-            bookId: books.first?.id ?? UUID(),
+            bookId: currentBookId ?? books.first?.id ?? UUID(),
             name: name,
             type: selectedType,
             amountMinor: amountMinor > 0 ? amountMinor : nil,
@@ -732,7 +738,7 @@ struct EntrySheet: View {
     private func save() {
         guard amountMinor > 0 else { return }
         guard let accountId = selectedAccountId ?? filteredAccounts.first?.id else { return }
-        let bookId = books.first?.id ?? UUID()
+        let bookId = currentBookId ?? books.first?.id ?? UUID()
 
         if selectedType == .transfer {
             guard let targetId = counterAccountId, targetId != accountId else { return }
@@ -775,6 +781,25 @@ struct EntrySheet: View {
                 paymentMinor: amountMinor,
                 statements: statements.filter { $0.accountId == card.id }
             )
+            try? context.save()
+        }
+
+        // 投资账户：转账自动同步持仓成本
+        if editingTxn == nil, selectedType == .transfer {
+            if let targetId = counterAccountId,
+               let target = accounts.first(where: { $0.id == targetId }),
+               target.type == .investment {
+                target.positionCostMinor = InvestmentService.costAfterContribution(
+                    current: target.positionCostMinor,
+                    amount: amountMinor
+                )
+            }
+            if let source = accounts.first(where: { $0.id == accountId }), source.type == .investment {
+                source.positionCostMinor = InvestmentService.costAfterWithdrawal(
+                    current: source.positionCostMinor,
+                    amount: amountMinor
+                )
+            }
             try? context.save()
         }
 

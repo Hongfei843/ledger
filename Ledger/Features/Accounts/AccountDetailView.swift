@@ -175,6 +175,9 @@ struct AccountDetailView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Text("转入/转出该账户（转账）会自动同步持仓成本。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 

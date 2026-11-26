@@ -9,6 +9,7 @@ struct SearchView: View {
     ) private var allTxns: [Txn]
     @Query private var categories: [Category]
     @Query private var accounts: [Account]
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
 
     @State private var criteria = TxnSearchCriteria()
 
@@ -16,7 +17,8 @@ struct SearchView: View {
         let categoryMap = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0.name) })
         let accountMap = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0.displayName) })
         return allTxns.filter { txn in
-            criteria.matches(
+            guard BookScope.matches(txn.bookId, raw: currentBookRaw) else { return false }
+            return criteria.matches(
                 txn,
                 categoryName: txn.categoryId.flatMap { categoryMap[$0] },
                 accountName: accountMap[txn.accountId]
@@ -100,7 +102,7 @@ struct SearchView: View {
 
                 Menu {
                     Button("全部账户") { criteria.accountId = nil }
-                    ForEach(accounts.filter { $0.deletedAt == nil && !$0.isSystem }, id: \.id) { account in
+                    ForEach(accounts.filter { $0.deletedAt == nil && !$0.isSystem && BookScope.matches($0.bookId, raw: currentBookRaw) }, id: \.id) { account in
                         Button(account.displayName) { criteria.accountId = account.id }
                     }
                 } label: {
@@ -109,7 +111,7 @@ struct SearchView: View {
 
                 Menu {
                     Button("全部分类") { criteria.categoryId = nil }
-                    ForEach(categories.filter { $0.deletedAt == nil && !$0.isArchived }, id: \.id) { category in
+                    ForEach(categories.filter { $0.deletedAt == nil && !$0.isArchived && BookScope.matches($0.bookId, raw: currentBookRaw) }, id: \.id) { category in
                         Button("\(category.iconEmoji) \(category.name)") { criteria.categoryId = category.id }
                     }
                 } label: {

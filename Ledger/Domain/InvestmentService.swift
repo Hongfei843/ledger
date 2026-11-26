@@ -57,4 +57,14 @@ enum InvestmentService {
         let cost = positions.reduce(Int64(0)) { $0 + $1.costMinor }
         return InvestmentPortfolio(valueMinor: value, costMinor: cost, positions: positions)
     }
+
+    /// 转入投资账户：持仓成本增加
+    static func costAfterContribution(current: Int64?, amount: Int64) -> Int64 {
+        max(0, (current ?? 0) + max(0, amount))
+    }
+
+    /// 转出投资账户：持仓成本减少（不会小于 0）
+    static func costAfterWithdrawal(current: Int64?, amount: Int64) -> Int64 {
+        max(0, (current ?? 0) - max(0, amount))
+    }
 }

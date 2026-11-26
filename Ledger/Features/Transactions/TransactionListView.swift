@@ -21,6 +21,7 @@ struct TransactionListView: View {
     @Query private var loans: [Loan]
     @Query private var scheduleItems: [LoanScheduleItem]
     @Query private var statements: [Statement]
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
 
     @State private var showEntry = false
     @State private var editingTxn: Txn?
@@ -50,7 +51,10 @@ struct TransactionListView: View {
         let loanId: UUID?
     }
 
-    private var activeTxns: [Txn] { allTxns }
+    private var currentBookId: UUID? { UUID(uuidString: currentBookRaw) }
+    private func bookMatches(_ id: UUID) -> Bool { BookScope.matches(id, raw: currentBookRaw) }
+
+    private var activeTxns: [Txn] { allTxns.filter { bookMatches($0.bookId) } }
     private var interval: DateInterval { period.interval() }
 
     private var periodTxns: [Txn] {
@@ -94,6 +98,7 @@ struct TransactionListView: View {
         )
         return accounts.filter {
             $0.deletedAt == nil && !$0.isArchived && !$0.isSystem
+                && bookMatches($0.bookId)
                 && ($0.lastReconciledAt ?? .distantPast) < threshold
                 && (activeAccountIds.contains($0.id) || $0.openingBalanceMinor != 0)
         }
@@ -105,7 +110,7 @@ struct TransactionListView: View {
         let today = calendar.startOfDay(for: Date())
         var result: [DueReminder] = []
 
-        for account in accounts where account.deletedAt == nil && !account.isArchived && account.type.isCreditLike {
+        for account in accounts where account.deletedAt == nil && !account.isArchived && account.type.isCreditLike && bookMatches(account.bookId) {
             guard let billDay = account.billDay, let dueDay = account.dueDay, billDay > 0, dueDay > 0 else { continue }
             let cycle = CreditCardCycle(billDay: billDay, dueDay: dueDay)
             guard let due = cycle.dueDate(reference: Date()) else { continue }
@@ -149,7 +154,7 @@ struct TransactionListView: View {
     /// 之前每个卡片各算一次，账户多时是 O(账户 × 流水)，列表滚动会卡。
     private var accountBalances: [UUID: Int64] {
         var map: [UUID: Int64] = [:]
-        for account in accounts where account.deletedAt == nil && !account.isArchived {
+        for account in accounts where account.deletedAt == nil && !account.isArchived && bookMatches(account.bookId) {
             map[account.id] = account.openingBalanceMinor
         }
         for txn in activeTxns {

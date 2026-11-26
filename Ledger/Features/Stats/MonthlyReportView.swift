@@ -6,6 +6,7 @@ import Charts
 struct MonthlyReportView: View {
     @Query(sort: \Txn.occurredAt, order: .reverse) private var allTxns: [Txn]
     @Query private var categories: [Category]
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
 
     @State private var monthAnchor: Date
 
@@ -13,10 +14,18 @@ struct MonthlyReportView: View {
         _monthAnchor = State(initialValue: month)
     }
 
-    private var liveTxns: [Txn] { allTxns.filter { $0.deletedAt == nil } }
+    private var bookMatches: (UUID) -> Bool {
+        { BookScope.matches($0, raw: currentBookRaw) }
+    }
+
+    private var liveTxns: [Txn] { allTxns.filter { $0.deletedAt == nil && bookMatches($0.bookId) } }
 
     private var report: MonthlyReport {
-        MonthlyReportBuilder.build(monthAnchor: monthAnchor, txns: liveTxns, categories: categories)
+        MonthlyReportBuilder.build(
+            monthAnchor: monthAnchor,
+            txns: liveTxns,
+            categories: categories.filter { bookMatches($0.bookId) }
+        )
     }
 
     var body: some View {
