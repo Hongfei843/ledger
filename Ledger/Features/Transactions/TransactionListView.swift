@@ -26,6 +26,7 @@ struct TransactionListView: View {
     @State private var editingTxn: Txn?
     @State private var period = PeriodRange()
     @State private var showCustomRange = false
+    @State private var didRestorePeriod = false
     @State private var customStart = Date()
     @State private var customEnd = Date()
     @State private var toast: ToastState?
@@ -379,8 +380,17 @@ struct TransactionListView: View {
                     .presentationDetents([.height(300)])
             }
             .onAppear {
+                if !didRestorePeriod {
+                    didRestorePeriod = true
+                    if let saved = PeriodPreference.load() {
+                        period = saved
+                    }
+                }
                 customStart = period.customStart ?? AppCalendar.startOfMonth(Date())
                 customEnd = period.customEnd ?? Date()
+            }
+            .onChange(of: period) { _, newValue in
+                PeriodPreference.save(range: newValue)
             }
         }
     }

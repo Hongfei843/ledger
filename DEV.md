@@ -13,7 +13,7 @@
 - 推送：`pwsh -File .gh/push.ps1 -Message "..."`
 - 构建：`pwsh -File .gh/ci.ps1`（会自动等结果并抓失败日志）
 - 令牌：`.gh/token.txt`（仓库外，7 天过期）
-- 测试：131 个用例，CI 每次真跑
+- 测试：135 个用例，CI 每次真跑
 - 最近绿色构建：2026-11-26 run 45745724024（`macos-15-intel`，131 测试全绿，含图标修复/首页排版/快捷记账）
 
 ## 1. 产品定位
@@ -25,7 +25,7 @@
 
 **记账**：支出/收入/转账；金额、分类、账户、日期、商家、备注、可报销；账户按使用频次排序并显示余额/可用额度，数字键盘长按退格清空、保存键显示金额；快捷日期（今天/昨天/前天）、记住上次账户与分类；截图识别预填（快捷指令/操作按钮、相册、文件打开）；右滑编辑、左滑删除（5 秒撤销）。
 
-**首页**：日/周/月/年/自定义周期切换；收支双卡 + 结余/昨日/净资产；账户横滑卡（更紧凑，长按可「记一笔到该账户」）；7 天内到期提醒（信用卡带待还金额）；未对账提醒；搜索（关键词/金额区间/时间范围/可报销/退款）。
+**首页**：日/周/月/年/自定义周期切换（会记住上次选择）；收支双卡 + 结余/昨日/净资产；账户横滑卡（更紧凑，长按可「记一笔到该账户」）；7 天内到期提醒（信用卡带待还金额）；未对账提醒；搜索（关键词/金额区间/时间范围/可报销/退款）。
 
 **账户**：8 种类型；银行/平台品牌图标（32 个）；卡号后四位；余额校准；信用卡账单日/还款日/额度；账单登记与还款核销。资产总览含近 6 个月净资产趋势（按月末重算余额）。
 
@@ -49,7 +49,7 @@
 
 **导入导出**：Cookie CSV 导入（自动归类）；支付宝/微信账单比对（漏记/多记）；AI 分析包（ZIP）；完整备份 JSON。
 
-**其他**：周期记账自动生成；借入借出（应收/应付跟踪）；截图识别记账（本地 OCR，可接快捷指令/操作按钮）；数据健康度；面容 ID 锁；隐私遮罩；四套可切换图标；一键初始化（倒计时 + 二次确认）。
+**其他**：周期记账自动生成；借入借出（应收/应付跟踪）；截图识别记账（本地 OCR，可接快捷指令/操作按钮）；数据健康度；面容 ID 锁；隐私遮罩；极简应用图标（固定单图标）；一键初始化（倒计时 + 二次确认）。
 
 ## 3. 页面结构
 
@@ -57,7 +57,7 @@
 明细 | 统计 | 报销 | 负债 | 我的
 ```
 
-「我的」下的二级页面：账户管理、分类管理、对账、资产总览、周期记账、数据健康、导入账单、账单比对、导出分析包、初始化数据、外观（主题色 + 图标风格）、应用图标、安全、提醒。
+「我的」下的二级页面：账户管理、分类管理、对账、资产总览、周期记账、数据健康、导入账单、账单比对、导出分析包、初始化数据、外观（主题色 + 分类图标风格）、安全、提醒。
 
 ## 4. 代码结构
 
@@ -92,21 +92,21 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 
 要点：
 - 不手写 `.xcodeproj`，由 `project.yml` 生成
-- 必须保留 `ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES`，否则备选图标变空白
-- App 图标必须带完整尺寸矩阵（20/29/40/60/76/83.5/1024，含 @2x/@3x）：只放 1024 单尺寸时，重签安装后桌面可能空白；四套图标（AppIcon/Chart/Coin/Minimal）都要保持一致
-- 构建脚本（scripts/build-ipa.sh）会把完整图标 PNG 以传统文件名再拷一份到 App 根目录，并补 CFBundleIconFiles：重签工具/系统图标缓存只认 loose png 时靠它兜底
+- 应用图标固定为「极简」单图标：`AppIcon.appiconset` 必须带完整尺寸矩阵（20/29/40/60/76/83.5/1024，含 @2x/@3x），只放 1024 单尺寸时重签安装后桌面可能空白
+- 构建脚本（scripts/build-ipa.sh）会把完整图标 PNG 以传统文件名再拷一份到 App 根目录，并补 `CFBundleIconFiles`：重签工具/系统图标缓存只认 loose png 时靠它兜底
+- 不要再加多套备用图标（`CFBundleAlternateIcons`）：重签设备上部分备用图标会被 iOS 渲染成空白，已在设置里移除切换入口
 - 版本号由 CI 注入 `1.0.<run_number>`
 - 只在 workflow_dispatch 触发；推送后跑 `.gh/ci.ps1` 主动构建（push 不再自动跑，避免重复排队）
 - 标准 runner 合法标签（见 `actions/runner-images` README）：`macos-15-intel`（**默认，x64 池，2026-11-25 实测可用**）、`macos-15`（arm64 池，容量紧张）、`macos-26`（arm64）、`xcode-27-arm64`
 - ⚠️ `macos-15-arm64` / `macos-26-arm64` 是镜像目录名，**不是合法标签**，写了 job 会永远排队
 - 2026-11 起 macOS 托管 runner 容量长期紧张（尤其 arm64）：job 排队后 `cancelled` 且 0 步执行 = 平台容量问题，不是编译失败；跑 `.gh/ci-race.ps1` 自动轮换标签重试并抓包
 
-## 6. 测试覆盖（131）
+## 6. 测试覆盖（135）
 
-Money、Balance、AccountUsage、StatsEngine、NetWorthHistory、CashFlowForecast、CreditCardBill、
-StatementSettlement、LoanCalculator、CreditCardCycle、Statement、Debt、Refund、ScreenshotImport、
-QuickTemplate、TxnSearch、CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、RecurringEngine、
-ScreenshotParser、InsightEngine、ZipWriter、Smoke。
+Money、Balance、AccountUsage、PeriodPreference、StatsEngine、NetWorthHistory、CashFlowForecast、
+CreditCardBill、StatementSettlement、LoanCalculator、CreditCardCycle、Statement、Debt、Refund、
+ScreenshotImport、QuickTemplate、TxnSearch、CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、
+RecurringEngine、ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 
 ## 7. 已知限制
 
@@ -139,7 +139,7 @@ ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 | 单测失败 | 搜 `LedgerTests/.*swift` |
 | 文件选不中 | 已用 `DocumentPicker(asCopy: true)`，仍失败查 UI |
 | 深色看不见 | 颜色必须走 Theme |
-| 图标空白 | 检查 INCLUDE_ALL_APPICON_ASSETS |
+| 图标空白 | 检查 IPA 里 AppIcon 完整尺寸 loose png 与 CFBundleIconFiles；见 `scripts/build-ipa.sh` |
 | 余额对不上 | 对账页 / 数据健康 |
 | 卡顿 | 避免 body 里遍历全表（已改两处：首页余额、分类计数） |
 

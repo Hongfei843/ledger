@@ -11,22 +11,6 @@ struct SettingsView: View {
     @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
     @AppStorage(NotificationService.enabledKey) private var remindersEnabled = false
     @AppStorage("security.lockEnabled") private var lockEnabled = false
-    @State private var currentIconName: String? = UIApplication.shared.alternateIconName
-    @State private var iconMessage: String?
-
-    private struct AppIconOption: Identifiable {
-        let id: String?
-        let title: String
-        let preview: String
-    }
-
-    private let iconOptions: [AppIconOption] = [
-        AppIconOption(id: nil, title: "默认", preview: "iconPreview_default"),
-        AppIconOption(id: "AppIconMinimal", title: "极简", preview: "iconPreview_minimal"),
-        AppIconOption(id: "AppIconCoin", title: "金币", preview: "iconPreview_coin"),
-        AppIconOption(id: "AppIconChart", title: "图表", preview: "iconPreview_chart")
-    ]
-
     private var liveTxns: [Txn] {
         txns.filter { $0.deletedAt == nil }
     }
@@ -150,74 +134,11 @@ struct SettingsView: View {
                     Text("开启后，每次从后台回到轻账都需要验证。数据本身仍只存在本机。")
                 }
 
-                Section("应用图标") {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: Theme.Spacing.l) {
-                            ForEach(iconOptions) { option in
-                                iconCell(option)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-
                 Section("关于") {
                     LabeledContent("版本", value: appVersionText)
                 }
             }
             .navigationTitle("我的")
-            .alert(
-                "应用图标",
-                isPresented: Binding(
-                    get: { iconMessage != nil },
-                    set: { if !$0 { iconMessage = nil } }
-                )
-            ) {
-                Button("好", role: .cancel) {}
-            } message: {
-                Text(iconMessage ?? "")
-            }
-        }
-    }
-
-    private func iconCell(_ option: AppIconOption) -> some View {
-        let selected = currentIconName == option.id
-        return Button {
-            applyIcon(option.id)
-        } label: {
-            VStack(spacing: 6) {
-                Image(option.preview)
-                    .resizable()
-                    .frame(width: 58, height: 58)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(selected ? Theme.accent : Color.clear, lineWidth: 2)
-                    )
-                Text(option.title)
-                    .font(.caption2)
-                    .foregroundStyle(selected ? Theme.accent : .secondary)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func applyIcon(_ name: String?) {
-        guard UIApplication.shared.supportsAlternateIcons else {
-            iconMessage = "这台设备或这套安装方式不支持切换备用图标。"
-            return
-        }
-        UIApplication.shared.setAlternateIconName(name) { error in
-            DispatchQueue.main.async {
-                if let error {
-                    iconMessage = "切换图标失败：\(error.localizedDescription)"
-                    Haptics.warning()
-                } else {
-                    currentIconName = name
-                    iconMessage = name == nil ? "已切回默认图标。" : "已切换图标，回到桌面查看（系统可能延迟几秒）。"
-                    Haptics.success()
-                }
-            }
         }
     }
 
