@@ -18,7 +18,10 @@ struct AssetsHomeView: View {
             .filter { $0.deletedAt == nil && !$0.isArchived && bookMatches($0.bookId) }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
-    private var liveStatements: [Statement] { statements.filter { bookMatches($0.bookId) } }
+    private var liveStatements: [Statement] {
+        let accountIds = Set(liveAccounts.map { $0.id })
+        return statements.filter { accountIds.contains($0.accountId) }
+    }
     private var liveDebts: [Debt] { debts.filter { $0.deletedAt == nil && bookMatches($0.bookId) } }
     private var balances: [UUID: Int64] {
         var map: [UUID: Int64] = [:]
