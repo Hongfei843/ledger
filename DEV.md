@@ -13,7 +13,7 @@
 - 推送：`pwsh -File .gh/push.ps1 -Message "..."`
 - 构建：`pwsh -File .gh/ci.ps1`（会自动等结果并抓失败日志）
 - 令牌：`.gh/token.txt`（仓库外，7 天过期）
-- 测试：135 个用例，CI 每次真跑
+- 测试：140 个用例，CI 每次真跑
 - 最近绿色构建：2026-11-26 run 45751773378（`macos-15-intel`，135 测试全绿，默认极简图标/周期记忆）
 
 ## 1. 产品定位
@@ -47,7 +47,7 @@
 
 **对账**：一页填实际余额；差异自动生成调整；每次对账留痕（ReconciliationRun）。
 
-**导入导出**：Cookie CSV 导入（自动归类）；支付宝/微信账单比对（漏记/多记）；AI 分析包（ZIP）；完整备份 JSON。
+**导入导出**：Cookie CSV 导入（自动归类）；支付宝/微信账单比对（漏记/多记）；AI 分析包（ZIP）；完整备份 JSON v2（一键恢复，恢复前自动留副本）。
 
 **其他**：周期记账自动生成；借入借出（应收/应付跟踪）；截图识别记账（本地 OCR，可接快捷指令/操作按钮）；数据健康度；面容 ID 锁；隐私遮罩；极简应用图标（固定单图标）；一键初始化（倒计时 + 二次确认）。
 
@@ -57,7 +57,7 @@
 明细 | 统计 | 报销 | 负债 | 我的
 ```
 
-「我的」下的二级页面：账户管理、分类管理、对账、资产总览、周期记账、数据健康、导入账单、账单比对、导出分析包、初始化数据、外观（主题色 + 分类图标风格）、安全、提醒。
+「我的」下的二级页面：账户管理、分类管理、对账、资产总览、周期记账、数据健康、导入账单、账单比对、导出分析包、备份与恢复、初始化数据、外观（主题色 + 分类图标风格）、安全、提醒。
 
 ## 4. 代码结构
 
@@ -101,12 +101,12 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 - ⚠️ `macos-15-arm64` / `macos-26-arm64` 是镜像目录名，**不是合法标签**，写了 job 会永远排队
 - 2026-11 起 macOS 托管 runner 容量长期紧张（尤其 arm64）：job 排队后 `cancelled` 且 0 步执行 = 平台容量问题，不是编译失败；跑 `.gh/ci-race.ps1` 自动轮换标签重试并抓包
 
-## 6. 测试覆盖（135）
+## 6. 测试覆盖（140）
 
-Money、Balance、AccountUsage、PeriodPreference、StatsEngine、NetWorthHistory、CashFlowForecast、
-CreditCardBill、StatementSettlement、LoanCalculator、CreditCardCycle、Statement、Debt、Refund、
-ScreenshotImport、QuickTemplate、TxnSearch、CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、
-RecurringEngine、ScreenshotParser、InsightEngine、ZipWriter、Smoke。
+Money、Balance、AccountUsage、BackupRestore、PeriodPreference、StatsEngine、NetWorthHistory、
+CashFlowForecast、CreditCardBill、StatementSettlement、LoanCalculator、CreditCardCycle、Statement、
+Debt、Refund、ScreenshotImport、QuickTemplate、TxnSearch、CookieCSVImporter、BillCSV、CategoryMatcher、
+PeriodRange、RecurringEngine、ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 
 ## 7. 已知限制
 

@@ -66,6 +66,9 @@ struct SettingsView: View {
                     NavigationLink("导出分析包") {
                         ExportView()
                     }
+                    NavigationLink("备份与恢复") {
+                        BackupRestoreView()
+                    }
                     LabeledContent("流水条数", value: "\(liveTxns.count)")
                     LabeledContent("账户数", value: "\(accounts.filter { $0.deletedAt == nil }.count)")
                 }
