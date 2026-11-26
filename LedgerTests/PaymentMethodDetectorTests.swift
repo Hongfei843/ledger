@@ -52,9 +52,10 @@ final class CategorySeedTests: XCTestCase {
         XCTAssertTrue(names.contains("电费"))
         XCTAssertTrue(names.contains("燃气费"))
         XCTAssertFalse(names.contains("水电燃气"))
+        XCTAssertFalse(names.contains("买菜"))
         XCTAssertFalse(names.contains("零食"))
         XCTAssertFalse(names.contains("外卖"))
-        XCTAssertGreaterThanOrEqual(names.count, 28)
+        XCTAssertGreaterThanOrEqual(names.count, 26)
     }
 
     func testIncomeCategoryNamesUnique() {

@@ -10,11 +10,10 @@ enum SeedData {
     }
 
     private static let versionKey = "seed.categories.version"
-    static let currentVersion = 6
+    static let currentVersion = 7
 
     static let expenseCategories: [CategorySeed] = [
         CategorySeed(name: "餐饮", emoji: "🍜"),
-        CategorySeed(name: "买菜", emoji: "🥬"),
         CategorySeed(name: "交通", emoji: "🚇"),
         CategorySeed(name: "购物", emoji: "🛍️"),
         CategorySeed(name: "日用", emoji: "🧻"),
@@ -55,25 +54,8 @@ enum SeedData {
         CategorySeed(name: "其他", emoji: "📦")
     ]
 
-    /// 旧分类 → 新分类。升级时把流水迁过去，旧分类归档。
-    private static let mergeMap: [String: String] = [
-        // 支出
-        "咖啡奶茶": "餐饮", "外卖": "餐饮", "买菜": "餐饮", "水果": "餐饮", "零食": "餐饮", "烟酒": "餐饮",
-        "打车": "交通", "公交地铁": "交通", "加油": "交通", "停车": "交通",
-        "服饰": "购物", "美妆": "购物", "数码": "购物", "家装": "购物",
-        "物业": "居住", "宽带": "居住",
-        "电影": "娱乐", "健身": "娱乐",
-        "药品": "医疗", "体检": "医疗",
-        "书籍": "教育",
-        "住宿": "旅行",
-        "话费": "通讯",
-        "人情送礼": "人情",
-        "App 订阅": "订阅服务",
-        // 收入
-        "年终奖": "奖金", "利息收入": "投资收益", "礼金": "红包"
-    ]
-
-    /// 幂等：首次建库，或按版本号增量合并 + 补齐分类。
+    /// 幂等：首次建库，或按版本号补齐分类。
+    /// 开发期不保留历史数据迁移逻辑，避免包袱；正式使用前会清库重来。
     static func bootstrapIfNeeded(context: ModelContext) {
         let books = (try? context.fetch(FetchDescriptor<Book>())) ?? []
 
@@ -87,65 +69,8 @@ enum SeedData {
         guard storedVersion < currentVersion else { return }
         guard let book = books.first else { return }
 
-        consolidateCategories(context: context, bookId: book.id)
         topUpCategories(context: context, bookId: book.id)
-        if storedVersion < 6 {
-            deprecateUtilitiesCategory(context: context)
-        }
         UserDefaults.standard.set(currentVersion, forKey: versionKey)
-    }
-
-    /// v4：把细分分类合并进大类，流水一并迁移
-    private static func consolidateCategories(context: ModelContext, bookId: UUID) {
-        let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
-        let txns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
-        var maxSort = (categories.map { $0.sortOrder }.max() ?? 0) + 1
-
-        for (oldName, newName) in mergeMap where oldName != newName {
-            guard let source = categories.first(where: { $0.name == oldName && $0.kind == .expense && $0.deletedAt == nil }) else {
-                continue
-            }
-            let target: Category
-            if let existing = categories.first(where: { $0.name == newName && $0.kind == .expense && $0.deletedAt == nil }) {
-                target = existing
-            } else {
-                let created = Category(bookId: bookId, name: newName, kind: .expense, sortOrder: maxSort)
-                maxSort += 1
-                context.insert(created)
-                target = created
-            }
-
-            for txn in txns where txn.categoryId == source.id {
-                txn.categoryId = target.id
-                txn.updatedAt = Date()
-            }
-            source.isArchived = true
-            source.updatedAt = Date()
-        }
-
-        // 收入侧合并
-        for (oldName, newName) in [("年终奖", "奖金"), ("利息收入", "投资收益"), ("礼金", "红包")] {
-            guard let source = categories.first(where: { $0.name == oldName && $0.kind == .income && $0.deletedAt == nil }) else {
-                continue
-            }
-            let target: Category
-            if let existing = categories.first(where: { $0.name == newName && $0.kind == .income && $0.deletedAt == nil }) {
-                target = existing
-            } else {
-                let created = Category(bookId: bookId, name: newName, kind: .income, sortOrder: maxSort)
-                maxSort += 1
-                context.insert(created)
-                target = created
-            }
-            for txn in txns where txn.categoryId == source.id {
-                txn.categoryId = target.id
-                txn.updatedAt = Date()
-            }
-            source.isArchived = true
-            source.updatedAt = Date()
-        }
-
-        try? context.save()
     }
 
     private static func createDefaultData(context: ModelContext) {
@@ -186,16 +111,6 @@ enum SeedData {
             )
             context.insert(category)
         }
-    }
-
-    /// v6：水电燃气拆成水费/电费/燃气费，旧分类归档（历史流水保留原分类）。
-    private static func deprecateUtilitiesCategory(context: ModelContext) {
-        let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
-        for category in categories where category.name == "水电燃气" && !category.isArchived {
-            category.isArchived = true
-            category.updatedAt = Date()
-        }
-        try? context.save()
     }
 
     /// 老用户升级：只补缺失的分类，不覆盖已有名称与排序偏好。

@@ -109,10 +109,24 @@ struct RootTabView: View {
                 handleQuickAction(type)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .intentOpenEntry)) { _ in
+            IntentBridge.clearPending()
+            showQuickEntry = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .intentImportScreenshot)) { _ in
+            IntentBridge.clearPending()
+            importScreenshotFromInbox()
+        }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
             if let pending = UserDefaults.standard.string(forKey: AppDelegate.pendingQuickActionKey) {
                 handleQuickAction(pending)
+            }
+            if let action = IntentBridge.takePending() {
+                switch action {
+                case .entry: showQuickEntry = true
+                case .screenshot: importScreenshotFromInbox()
+                }
             }
             // 补记周期交易（房租、订阅等），失败不影响启动
             _ = RecurringService.run(context: context)
