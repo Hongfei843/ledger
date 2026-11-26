@@ -81,6 +81,45 @@ cp -R "$APP_PATH" "$OUT_DIR/Payload/"
 rm -rf "$OUT_DIR/Payload/$SCHEME.app/_CodeSignature" 2>/dev/null || true
 rm -f  "$OUT_DIR/Payload/$SCHEME.app/embedded.mobileprovision" 2>/dev/null || true
 
+# ---------------------------------------------------------------
+# 兜底：把 App 图标 PNG 同时以传统文件名放一份到 App 根目录。
+# 重签工具/系统图标缓存只认这些 loose png 时，可以避免桌面图标空白。
+# 资产目录里的高清版本仍然在 Assets.car 里，两套并存不冲突。
+# ---------------------------------------------------------------
+APP_ROOT="$OUT_DIR/Payload/$SCHEME.app"
+ICONS_DIR="Ledger/Resources/Assets.xcassets"
+copy_icon() {
+  if [ -f "$1" ]; then
+    cp "$1" "$APP_ROOT/$2"
+  fi
+}
+
+for prefix in AppIcon AppIconMinimal AppIconCoin AppIconChart; do
+  # iPhone 各尺寸：CFBundleIconFiles 基名 + 尺寸 + 倍数
+  for size in 20x20 29x29 40x40 60x60; do
+    for scale in 2x 3x; do
+      copy_icon "$ICONS_DIR/$prefix.appiconset/${prefix}-iphone-${size}@${scale}.png" "${prefix}${size}@${scale}.png"
+    done
+  done
+  # iPad 各尺寸
+  for size in 20x20 29x29 40x40 76x76; do
+    for scale in 1x 2x; do
+      copy_icon "$ICONS_DIR/$prefix.appiconset/${prefix}-ipad-${size}@${scale}.png" "${prefix}${size}@${scale}~ipad.png"
+    done
+  done
+  copy_icon "$ICONS_DIR/$prefix.appiconset/${prefix}-ipad-83_5x83_5@2x.png" "${prefix}83.5x83.5@2x~ipad.png"
+  # 备用命名：CFBundleAlternateIcons 里基名就是 AppIconMinimal，系统会在后面直接补 @2x/@3x
+  copy_icon "$ICONS_DIR/$prefix.appiconset/${prefix}-iphone-60x60@2x.png" "${prefix}@2x.png"
+  copy_icon "$ICONS_DIR/$prefix.appiconset/${prefix}-iphone-60x60@3x.png" "${prefix}@3x.png"
+  copy_icon "$ICONS_DIR/$prefix.appiconset/${prefix}-iphone-60x60@2x.png" "${prefix}60x60@2x.png"
+  copy_icon "$ICONS_DIR/$prefix.appiconset/${prefix}-iphone-60x60@3x.png" "${prefix}60x60@3x.png"
+done
+
+# 最高优先级：CFBundleIconFiles 的合法入口（老系统/重签工具兼容）
+/usr/libexec/PlistBuddy -c "Delete :CFBundleIconFiles" "$APP_ROOT/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :CFBundleIconFiles array" "$APP_ROOT/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :CFBundleIconFiles:0 string AppIcon60x60" "$APP_ROOT/Info.plist" >/dev/null 2>&1 || true
+
 (
   cd "$OUT_DIR"
   zip -qry "$SCHEME-unsigned.ipa" Payload
