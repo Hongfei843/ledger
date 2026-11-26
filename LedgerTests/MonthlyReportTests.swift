@@ -115,19 +115,19 @@ final class InvestmentServiceTests: XCTestCase {
         return account
     }
 
-    func testProfitAndRate() {
+    func testProfitAndRate() throws {
         let account = makeInvestmentAccount(cost: 80_000)
-        let position = InvestmentService.position(for: account, txns: [])
-        XCTAssertEqual(position?.valueMinor, 100_000)
-        XCTAssertEqual(position?.profitMinor, 20_000)
-        XCTAssertEqual(position?.ratePercent ?? 0, 25, accuracy: 0.001)
+        let position = try XCTUnwrap(InvestmentService.position(for: account, txns: []))
+        XCTAssertEqual(position.valueMinor, 100_000)
+        XCTAssertEqual(position.profitMinor, 20_000)
+        XCTAssertEqual(position.ratePercent ?? 0, 25, accuracy: 0.001)
     }
 
-    func testMissingCostGivesNoRate() {
+    func testMissingCostGivesNoRate() throws {
         let account = makeInvestmentAccount(cost: nil)
-        let position = InvestmentService.position(for: account, txns: [])
-        XCTAssertEqual(position?.profitMinor, -100_000)
-        XCTAssertNil(position?.ratePercent)
+        let position = try XCTUnwrap(InvestmentService.position(for: account, txns: []))
+        XCTAssertNil(position.profitMinor)
+        XCTAssertNil(position.ratePercent)
     }
 
     func testOnlyInvestmentAccountsCounted() {
@@ -140,10 +140,10 @@ final class InvestmentServiceTests: XCTestCase {
         XCTAssertEqual(portfolio.profitMinor, 20_000)
     }
 
-    func testLossRate() {
+    func testLossRate() throws {
         let account = makeInvestmentAccount(cost: 120_000)
-        let position = InvestmentService.position(for: account, txns: [])
-        XCTAssertEqual(position?.profitMinor, -20_000)
-        XCTAssertEqual(position?.ratePercent ?? 0, -16.6667, accuracy: 0.001)
+        let position = try XCTUnwrap(InvestmentService.position(for: account, txns: []))
+        XCTAssertEqual(position.profitMinor, -20_000)
+        XCTAssertEqual(position.ratePercent ?? 0, -16.6667, accuracy: 0.001)
     }
 }

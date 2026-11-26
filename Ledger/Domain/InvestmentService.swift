@@ -6,11 +6,15 @@ struct InvestmentPosition {
     let valueMinor: Int64
     let costMinor: Int64
 
-    var profitMinor: Int64 { valueMinor - costMinor }
+    /// 浮动盈亏；没填成本时为 nil（不假装知道收益）
+    var profitMinor: Int64? {
+        guard costMinor > 0 else { return nil }
+        return valueMinor - costMinor
+    }
 
     /// 收益率（百分比）；成本 ≤ 0 时返回 nil
     var ratePercent: Double? {
-        guard costMinor > 0 else { return nil }
+        guard let profitMinor else { return nil }
         return Double(profitMinor) / Double(costMinor) * 100
     }
 }
@@ -20,10 +24,13 @@ struct InvestmentPortfolio {
     let costMinor: Int64
     let positions: [InvestmentPosition]
 
-    var profitMinor: Int64 { valueMinor - costMinor }
+    var profitMinor: Int64? {
+        guard costMinor > 0 else { return nil }
+        return valueMinor - costMinor
+    }
 
     var ratePercent: Double? {
-        guard costMinor > 0 else { return nil }
+        guard let profitMinor else { return nil }
         return Double(profitMinor) / Double(costMinor) * 100
     }
 }

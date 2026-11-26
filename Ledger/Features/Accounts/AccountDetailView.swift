@@ -164,8 +164,8 @@ struct AccountDetailView: View {
             if cost > 0, let position {
                 LabeledContent("持仓成本", value: Money.format(cost))
                 LabeledContent("浮动盈亏") {
-                    Text(Money.format(position.profitMinor, showSign: true))
-                        .foregroundStyle(position.profitMinor >= 0 ? Theme.income : Theme.danger)
+                    Text(Money.format(position.profitMinor ?? 0, showSign: true))
+                        .foregroundStyle((position.profitMinor ?? 0) >= 0 ? Theme.income : Theme.danger)
                 }
                 if let rate = position.ratePercent {
                     LabeledContent("收益率", value: String(format: "%+.2f%%", rate))

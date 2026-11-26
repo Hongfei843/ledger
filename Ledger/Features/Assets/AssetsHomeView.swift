@@ -147,11 +147,15 @@ struct AssetsHomeView: View {
                 .monospacedDigit()
             HStack(spacing: Theme.Spacing.l) {
                 Label("成本 \(Money.format(portfolio.costMinor))", systemImage: "yensign.circle")
-                Label(
-                    "浮动盈亏 \(Money.format(portfolio.profitMinor, showSign: true))",
-                    systemImage: portfolio.profitMinor >= 0 ? "arrow.up.right" : "arrow.down.right"
-                )
-                .foregroundStyle(portfolio.profitMinor >= 0 ? Theme.income : Theme.danger)
+                if let profit = portfolio.profitMinor {
+                    Label(
+                        "浮动盈亏 \(Money.format(profit, showSign: true))",
+                        systemImage: profit >= 0 ? "arrow.up.right" : "arrow.down.right"
+                    )
+                    .foregroundStyle(profit >= 0 ? Theme.income : Theme.danger)
+                } else {
+                    Label("未填成本", systemImage: "questionmark.circle")
+                }
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
