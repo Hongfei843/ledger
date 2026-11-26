@@ -52,6 +52,8 @@ struct EntrySheet: View {
     @State private var ocrHint: String?
     @State private var showSaveTemplate = false
     @State private var templateName = ""
+    @State private var accountUsage: [UUID: Int] = [:]
+    @State private var balanceCache: [UUID: Int64] = [:]
 
     /// 传入已有流水表示编辑模式；onSaved 用于父视图展示保存反馈
     private let editingTxn: Txn?
@@ -85,7 +87,8 @@ struct EntrySheet: View {
     // MARK: - 数据
 
     private var baseAccounts: [Account] {
-        accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+        let list = accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+        return AccountUsageService.orderedAccounts(list, usage: accountUsage)
     }
 
     private var filteredAccounts: [Account] {
@@ -146,6 +149,7 @@ struct EntrySheet: View {
                 if selectedType == .transfer {
                     transferSection
                 } else {
+                    accountStrip
                     categoryGrid
                 }
 
@@ -203,6 +207,8 @@ struct EntrySheet: View {
                     counts[categoryId, default: 0] += 1
                 }
                 usageCache = counts
+                accountUsage = AccountUsageService.usageCounts(txns: allTxns)
+                balanceCache = AccountUsageService.balanceMap(accounts: accounts, txns: allTxns)
             }
         }
     }
@@ -268,7 +274,7 @@ struct EntrySheet: View {
             }
             .padding(.horizontal, Theme.Spacing.l)
         }
-        .frame(maxHeight: 260)
+        .frame(maxHeight: 224)
     }
 
     private func sectionTitle(_ text: String) -> some View {
@@ -344,26 +350,47 @@ struct EntrySheet: View {
         }
     }
 
+    private var accountStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Theme.Spacing.s) {
+                ForEach(filteredAccounts, id: \.id) { account in
+                    accountChip(account, selection: $selectedAccountId)
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.l)
+        }
+        .padding(.top, Theme.Spacing.s)
+    }
+
     private func accountChip(_ account: Account, selection: Binding<UUID?>) -> some View {
         let selected = selection.wrappedValue == account.id
+        let balance = balanceCache[account.id] ?? account.cachedBalanceMinor
         return Button {
             selection.wrappedValue = account.id
             Haptics.selection()
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 BankMarkView(
                     bankId: account.bankId,
                     fallbackEmoji: account.iconEmoji,
                     fallbackColorHex: account.colorHex,
                     size: 18
                 )
-                Text(account.displayName).font(.caption)
-                if account.type.isLiability {
-                    Text("负债").font(.system(size: 8)).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 4) {
+                        Text(account.displayName).font(.caption).lineLimit(1)
+                        if account.type.isLiability {
+                            Text("负债").font(.system(size: 8)).foregroundStyle(.secondary)
+                        }
+                    }
+                    Text(AccountUsageService.subtitle(account: account, balanceMinor: balance))
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
             .padding(.horizontal, Theme.Spacing.m)
-            .padding(.vertical, Theme.Spacing.s)
+            .padding(.vertical, Theme.Spacing.xs + 2)
             .background(selected ? Theme.accent.opacity(0.16) : Color(.secondarySystemBackground), in: Capsule())
             .foregroundStyle(selected ? Theme.accent : .primary)
         }
@@ -434,7 +461,7 @@ struct EntrySheet: View {
                 appendKey(key)
             }
             Button(action: save) {
-                Text("保存")
+                Text(canSave ? "保存 \(Money.format(amountMinor))" : "保存")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
@@ -586,6 +613,11 @@ struct EntrySheet: View {
     private static let lastAccountKey = "entry.lastAccountId"
 
     private func appendKey(_ key: String) {
+        if key == "C" {
+            amountText = "0"
+            Haptics.warning()
+            return
+        }
         if key == "⌫" {
             amountText = String(amountText.dropLast())
             if amountText.isEmpty { amountText = "0" }
@@ -763,6 +795,9 @@ struct NumberPad: View {
                                 .foregroundStyle(.primary)
                         }
                         .buttonStyle(.plain)
+                        .onLongPressGesture(minimumDuration: 0.6) {
+                            if key == "⌫" { onKey("C") }
+                        }
                     }
                 }
             }

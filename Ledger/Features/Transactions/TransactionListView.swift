@@ -20,6 +20,7 @@ struct TransactionListView: View {
     @Query private var categories: [Category]
     @Query private var loans: [Loan]
     @Query private var scheduleItems: [LoanScheduleItem]
+    @Query private var statements: [Statement]
 
     @State private var showEntry = false
     @State private var editingTxn: Txn?
@@ -108,11 +109,14 @@ struct TransactionListView: View {
             guard let due = cycle.dueDate(reference: Date()) else { continue }
             let days = calendar.dateComponents([.day], from: today, to: calendar.startOfDay(for: due)).day ?? 99
             guard days >= 0, days <= 7 else { continue }
+            let info = CreditCardBillService.info(for: account, txns: activeTxns, statements: statements)
+            let amount = info?.registered?.outstandingMinor ?? info?.estimatedAmountMinor ?? 0
+            let dueText = "还款日 \(DateFormatter.ledgerShort.string(from: due))"
             result.append(
                 DueReminder(
                     id: "card-\(account.id.uuidString)",
                     title: account.displayName,
-                    detail: "还款日 \(DateFormatter.ledgerShort.string(from: due))",
+                    detail: amount > 0 ? "\(dueText) · \(Money.format(amount))" : dueText,
                     days: days,
                     accountId: account.id,
                     loanId: nil
@@ -626,10 +630,32 @@ struct TransactionListView: View {
                 .foregroundStyle(balance < 0 ? Theme.danger : .primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
+            if let caption = creditCaption(account) {
+                Text(caption)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
         }
         .frame(width: 132, alignment: .leading)
         .padding(Theme.Spacing.m)
         .cardStyle(radius: 14)
+    }
+
+    private func creditCaption(_ account: Account) -> String? {
+        guard account.type.isCreditLike,
+              let info = CreditCardBillService.info(for: account, txns: activeTxns, statements: statements) else {
+            return nil
+        }
+        let due = DateFormatter.ledgerShort.string(from: info.dueDate)
+        if let statement = info.registered {
+            return "待还 \(Money.format(statement.outstandingMinor)) · \(due)"
+        }
+        if info.estimatedAmountMinor > 0 {
+            return "本期约 \(Money.format(info.estimatedAmountMinor)) · \(due)"
+        }
+        return "还款日 \(due)"
     }
 
     private func reminderRow(_ item: DueReminder) -> some View {

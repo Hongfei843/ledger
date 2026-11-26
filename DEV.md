@@ -13,7 +13,7 @@
 - 推送：`pwsh -File .gh/push.ps1 -Message "..."`
 - 构建：`pwsh -File .gh/ci.ps1`（会自动等结果并抓失败日志）
 - 令牌：`.gh/token.txt`（仓库外，7 天过期）
-- 测试：127 个用例，CI 每次真跑
+- 测试：131 个用例，CI 每次真跑
 - 最近绿色构建：2026-11-26 run 45728742723（`macos-15-intel`，127 测试全绿，含信用卡账单联动/资金计划/净资产趋势）
 
 ## 1. 产品定位
@@ -23,7 +23,7 @@
 
 ## 2. 当前功能全景
 
-**记账**：支出/收入/转账；金额、分类、账户、日期、商家、备注、可报销；快捷日期（今天/昨天/前天）、记住上次账户与分类；截图识别预填（快捷指令/操作按钮、相册、文件打开）；右滑编辑、左滑删除（5 秒撤销）。
+**记账**：支出/收入/转账；金额、分类、账户、日期、商家、备注、可报销；账户按使用频次排序并显示余额/可用额度，数字键盘长按退格清空、保存键显示金额；快捷日期（今天/昨天/前天）、记住上次账户与分类；截图识别预填（快捷指令/操作按钮、相册、文件打开）；右滑编辑、左滑删除（5 秒撤销）。
 
 **首页**：日/周/月/年/自定义周期切换；收支双卡 + 结余/昨日/净资产；账户横滑卡；7 天内到期提醒；未对账提醒；搜索（关键词/金额区间/时间范围/可报销/退款）。
 
@@ -99,12 +99,12 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 - ⚠️ `macos-15-arm64` / `macos-26-arm64` 是镜像目录名，**不是合法标签**，写了 job 会永远排队
 - 2026-11 起 macOS 托管 runner 容量长期紧张（尤其 arm64）：job 排队后 `cancelled` 且 0 步执行 = 平台容量问题，不是编译失败；跑 `.gh/ci-race.ps1` 自动轮换标签重试并抓包
 
-## 6. 测试覆盖（127）
+## 6. 测试覆盖（131）
 
-Money、Balance、StatsEngine、NetWorthHistory、CashFlowForecast、CreditCardBill、StatementSettlement、
-LoanCalculator、CreditCardCycle、Statement、Debt、Refund、ScreenshotImport、QuickTemplate、TxnSearch、
-CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngine、
-ZipWriter、Smoke。
+Money、Balance、AccountUsage、StatsEngine、NetWorthHistory、CashFlowForecast、CreditCardBill、
+StatementSettlement、LoanCalculator、CreditCardCycle、Statement、Debt、Refund、ScreenshotImport、
+QuickTemplate、TxnSearch、CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、RecurringEngine、
+ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 
 ## 7. 已知限制
 
