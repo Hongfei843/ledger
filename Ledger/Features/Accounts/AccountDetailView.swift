@@ -37,16 +37,12 @@ struct AccountDetailView: View {
         )
     }
 
-    private var cycle: CreditCardCycle? {
-        guard let billDay = account.billDay, let dueDay = account.dueDay, billDay > 0, dueDay > 0 else { return nil }
-        return CreditCardCycle(billDay: billDay, dueDay: dueDay)
-    }
-
-    private var statementAmount: Int64? {
-        guard let cycle, let period = cycle.statementPeriod(reference: Date()) else { return nil }
-        return allTxns
-            .filter { $0.deletedAt == nil && $0.accountId == account.id && $0.type == .expense && period.contains($0.occurredAt) }
-            .reduce(Int64(0)) { $0 + $1.amountMinor }
+    private var billInfo: CreditCardBillInfo? {
+        CreditCardBillService.info(
+            for: account,
+            txns: allTxns.filter { $0.deletedAt == nil },
+            statements: statements
+        )
     }
 
     var body: some View {
@@ -124,7 +120,12 @@ struct AccountDetailView: View {
                 .presentationDetents([.medium])
         }
         .sheet(isPresented: $showStatementEntry) {
-            StatementEntrySheet(account: account, suggestedAmount: statementAmount ?? 0)
+            StatementEntrySheet(
+                account: account,
+                suggestedAmount: billInfo?.estimatedAmountMinor ?? 0,
+                suggestedPeriodMonth: billInfo?.periodMonth,
+                suggestedDueDate: billInfo?.dueDate
+            )
                 .presentationDetents([.medium])
         }
         .sheet(item: $repayingStatement) { statement in
@@ -153,33 +154,57 @@ struct AccountDetailView: View {
 
     private var creditSection: some View {
         Section("本期账单") {
-            if let statementAmount {
-                LabeledContent("App 计算金额", value: Money.format(statementAmount))
-            }
+            if let info = billInfo {
+                LabeledContent("账单周期", value: periodText(info.statementPeriod))
+                LabeledContent("出账日", value: DateFormatter.ledgerShort.string(from: info.billDate))
+                LabeledContent("App 估算", value: Money.format(info.estimatedAmountMinor))
 
-            if let statement = activeStatement {
-                LabeledContent("账单金额", value: Money.format(statement.billAmountMinor))
-                LabeledContent("账单月份", value: statement.periodMonth)
-                LabeledContent("已还", value: Money.format(statement.paidAmountMinor))
-                LabeledContent("状态", value: statement.status.displayName)
-                if statement.outstandingMinor > 0 {
-                    Button("记还款") { repayingStatement = statement }
+                if let statement = info.registered {
+                    LabeledContent("已登记账单", value: Money.format(statement.billAmountMinor))
+                    if statement.billAmountMinor != info.estimatedAmountMinor {
+                        LabeledContent("与估算相差", value: signedDelta(statement.billAmountMinor - info.estimatedAmountMinor))
+                            .foregroundStyle(Theme.warning)
+                    }
+                    LabeledContent("已还", value: Money.format(statement.paidAmountMinor))
+                    LabeledContent("状态", value: statement.status.displayName)
+                    if statement.minimumPaymentMinor > 0 {
+                        LabeledContent(
+                            "最低还款未还",
+                            value: Money.format(max(0, statement.minimumPaymentMinor - statement.paidAmountMinor))
+                        )
+                    }
+                    if statement.outstandingMinor > 0 {
+                        Button("记还款") { repayingStatement = statement }
+                    }
+                } else {
+                    LabeledContent("已出账账单", value: "未登记")
+                    Button("按估算登记本期账单") { showStatementEntry = true }
                 }
-            } else {
-                Button("登记本期账单") { showStatementEntry = true }
-            }
 
-            if let cycle, let due = cycle.dueDate(reference: Date()) {
-                LabeledContent("最后还款日", value: DateFormatter.ledgerShort.string(from: due))
-                if let days = cycle.daysUntilDue(reference: Date()) {
-                    LabeledContent("剩余天数", value: days >= 0 ? "\(days) 天" : "已逾期 \(-days) 天")
-                }
+                LabeledContent("最后还款日", value: DateFormatter.ledgerShort.string(from: info.dueDate))
+                let days = AppCalendar.gregorian.dateComponents(
+                    [.day],
+                    from: AppCalendar.startOfDay(for: Date()),
+                    to: AppCalendar.startOfDay(for: info.dueDate)
+                ).day ?? 0
+                LabeledContent("剩余天数", value: days >= 0 ? "\(days) 天" : "已逾期 \(-days) 天")
+                    .foregroundStyle(days < 0 ? Theme.danger : .primary)
             } else {
                 Text("设置账单日与还款日后显示")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func periodText(_ period: DateInterval) -> String {
+        let end = period.end.addingTimeInterval(-1)
+        return "\(DateFormatter.ledgerShort.string(from: period.start)) – \(DateFormatter.ledgerShort.string(from: end))"
+    }
+
+    private func signedDelta(_ delta: Int64) -> String {
+        let prefix = delta >= 0 ? "+" : "-"
+        return prefix + Money.format(abs(delta))
     }
 
     private func reconcile() {
@@ -268,6 +293,15 @@ struct CreditCardSettingsSheet: View {    let account: Account
 struct StatementEntrySheet: View {
     let account: Account
     let suggestedAmount: Int64
+    let suggestedPeriodMonth: String?
+    let suggestedDueDate: Date?
+
+    init(account: Account, suggestedAmount: Int64, suggestedPeriodMonth: String? = nil, suggestedDueDate: Date? = nil) {
+        self.account = account
+        self.suggestedAmount = suggestedAmount
+        self.suggestedPeriodMonth = suggestedPeriodMonth
+        self.suggestedDueDate = suggestedDueDate
+    }
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -304,7 +338,9 @@ struct StatementEntrySheet: View {
                 if amountText.isEmpty, suggestedAmount > 0 {
                     amountText = Money.rawText(suggestedAmount)
                 }
-                if let billDay = account.billDay, let dueDay = account.dueDay {
+                if let suggestedDueDate {
+                    dueDate = suggestedDueDate
+                } else if let billDay = account.billDay, let dueDay = account.dueDay {
                     let cycle = CreditCardCycle(billDay: billDay, dueDay: dueDay)
                     dueDate = cycle.dueDate(reference: Date()) ?? Date()
                 }
@@ -316,7 +352,7 @@ struct StatementEntrySheet: View {
         guard let amount = Money.parse(amountText) else { return }
         let statement = Statement(
             accountId: account.id,
-            periodMonth: AppCalendar.monthKey(Date()),
+            periodMonth: suggestedPeriodMonth ?? AppCalendar.monthKey(Date()),
             billAmountMinor: amount,
             minimumPaymentMinor: Money.parse(minimumText) ?? 0,
             dueDate: dueDate
@@ -338,6 +374,7 @@ struct StatementRepaySheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query private var accounts: [Account]
+    @Query private var statements: [Statement]
 
     @State private var amountText = ""
     @State private var paymentAccountId: UUID?
@@ -404,8 +441,11 @@ struct StatementRepaySheet: View {
         )
         context.insert(transfer)
 
-        statement.paidAmountMinor += amount
-        statement.refreshStatus()
+        // 一笔还款可能覆盖多期账单：按最早到期优先自动分摊
+        _ = StatementSettlementService.apply(
+            paymentMinor: amount,
+            statements: statements.filter { $0.accountId == account.id }
+        )
         try? context.save()
 
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []

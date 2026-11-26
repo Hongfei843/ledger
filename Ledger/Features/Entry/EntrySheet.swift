@@ -35,6 +35,7 @@ struct EntrySheet: View {
     @Query private var books: [Book]
     @Query private var claims: [Claim]
     @Query private var templates: [QuickTemplate]
+    @Query private var statements: [Statement]
     @Query private var allTxns: [Txn]
 
     @State private var amountText = "0"
@@ -641,6 +642,17 @@ struct EntrySheet: View {
 
         try? context.save()
         refreshBalances()
+
+        // 转账到信用卡 = 还款：自动按最早到期核销已登记账单
+        if editingTxn == nil, selectedType == .transfer, let targetId = counterAccountId,
+           let card = accounts.first(where: { $0.id == targetId }), card.type.isCreditLike {
+            _ = StatementSettlementService.apply(
+                paymentMinor: amountMinor,
+                statements: statements.filter { $0.accountId == card.id }
+            )
+            try? context.save()
+        }
+
         Haptics.success()
 
         if let categoryId = selectedCategoryId {

@@ -158,7 +158,7 @@ enum CashFlowForecast {
                 let dueDayStart = calendar.startOfDay(for: due)
                 guard inWindow(dueDayStart), !seenDueDays.contains(dueDayStart) else { continue }
                 seenDueDays.insert(dueDayStart)
-                guard let estimate = estimatedBillMinor(account: account, cycle: cycle, txns: liveTxns, reference: dueDayStart) else { continue }
+                guard let estimate = CreditCardBillService.estimatedBillMinor(account: account, cycle: cycle, txns: liveTxns, reference: dueDayStart) else { continue }
                 let amount = min(estimate, debt)
                 guard amount > 0 else { continue }
                 events.append(
@@ -233,27 +233,6 @@ enum CashFlowForecast {
             startingBalanceMinor: startingBalance,
             events: events
         )
-    }
-
-    /// 按最近一个完整账单周期的消费估算本期待还
-    private static func estimatedBillMinor(
-        account: Account,
-        cycle: CreditCardCycle,
-        txns: [Txn],
-        reference: Date
-    ) -> Int64? {
-        guard let period = cycle.statementPeriod(reference: reference) else { return nil }
-        var expense: Int64 = 0
-        var refund: Int64 = 0
-        for txn in txns where txn.accountId == account.id && period.contains(txn.occurredAt) {
-            if txn.type == .expense {
-                expense += txn.amountMinor
-            } else if RefundService.isRefund(txn) {
-                refund += txn.amountMinor
-            }
-        }
-        let bill = RefundService.netExpense(expenseMinor: expense, refundMinor: refund)
-        return bill > 0 ? bill : nil
     }
 
     /// 周期规则在窗口内的发生日期（最多 90 次，避免异常规则）
