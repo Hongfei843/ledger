@@ -100,20 +100,35 @@ struct AssetsHomeView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(Money.format(netWorthMinor))
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(netWorthMinor < 0 ? Theme.danger : .primary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.55)
 
-            HStack(spacing: Theme.Spacing.s) {
+            HStack(spacing: Theme.Spacing.m) {
                 miniStat(title: "总资产", value: Money.format(assetTotalMinor), color: .primary)
                 miniStat(title: "总负债", value: Money.format(creditDebtMinor + loanOutstandingMinor), color: Theme.danger)
+            }
+            HStack(spacing: Theme.Spacing.m) {
                 miniStat(title: "投资市值", value: Money.format(portfolio.valueMinor), color: .primary)
+                if let profit = portfolio.profitMinor {
+                    miniStat(
+                        title: "投资盈亏",
+                        value: Money.format(profit, showSign: true),
+                        color: profit >= 0 ? Theme.income : Theme.danger
+                    )
+                } else {
+                    miniStat(title: "投资盈亏", value: "未填成本", color: .secondary)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle()
+        .padding(Theme.Spacing.m)
+        .background(
+            Color(.secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+        )
     }
 
     private func miniStat(title: String, value: String, color: Color) -> some View {
@@ -124,7 +139,7 @@ struct AssetsHomeView: View {
                 .monospacedDigit()
                 .foregroundStyle(color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.55)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

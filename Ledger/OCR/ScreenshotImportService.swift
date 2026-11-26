@@ -10,7 +10,11 @@ enum ScreenshotImportService {
             amountMinor: parsed.amountMinor,
             payee: parsed.payee,
             confidence: parsed.confidence,
-            rawText: parsed.rawText
+            rawText: parsed.rawText,
+            bankId: parsed.payment?.bankId,
+            bankName: parsed.payment?.bankName,
+            paymentAccountTypeRaw: parsed.payment?.accountType.rawValue,
+            cardTail: parsed.payment?.cardTail
         )
     }
 

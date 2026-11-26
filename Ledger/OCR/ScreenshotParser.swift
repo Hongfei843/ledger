@@ -3,6 +3,8 @@ import Foundation
 struct ParsedReceipt {
     var amountMinor: Int64?
     var payee: String?
+    /// 识别到的付款方式（银行/平台 + 卡类型 + 后四位）
+    var payment: DetectedPaymentMethod?
     var confidence: Double
     var rawText: String
 }
@@ -26,10 +28,12 @@ enum ScreenshotParser {
 
         let amount = extractAmount(lines: lines)
         let payee = extractPayee(texts: texts)
+        let payment = PaymentMethodDetector.detect(texts: texts)
 
         var confidence = 0.0
         if amount != nil { confidence += 0.55 }
         if payee != nil { confidence += 0.2 }
+        if payment != nil { confidence += 0.1 }
         if texts.contains(where: { line in successKeywords.contains(where: { line.contains($0) }) }) {
             confidence += 0.2
         }
@@ -37,6 +41,7 @@ enum ScreenshotParser {
         return ParsedReceipt(
             amountMinor: amount,
             payee: payee,
+            payment: payment,
             confidence: min(1.0, confidence),
             rawText: rawText
         )

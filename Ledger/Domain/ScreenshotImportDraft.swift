@@ -13,6 +13,11 @@ struct ScreenshotImportDraft: Codable, Equatable, Identifiable {
     var confidence: Double
     var rawText: String
     var createdAt: Date
+    /// 识别到的付款方式
+    var bankId: String?
+    var bankName: String?
+    var paymentAccountTypeRaw: String?
+    var cardTail: String?
 
     var hasAmount: Bool { (amountMinor ?? 0) > 0 }
 
@@ -22,7 +27,11 @@ struct ScreenshotImportDraft: Codable, Equatable, Identifiable {
         payee: String?,
         confidence: Double,
         rawText: String,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        bankId: String? = nil,
+        bankName: String? = nil,
+        paymentAccountTypeRaw: String? = nil,
+        cardTail: String? = nil
     ) {
         self.id = id
         self.amountMinor = amountMinor
@@ -31,6 +40,10 @@ struct ScreenshotImportDraft: Codable, Equatable, Identifiable {
         // OCR 原文只留一小段，够排查即可，不塞满 UserDefaults
         self.rawText = String(rawText.prefix(600))
         self.createdAt = createdAt
+        self.bankId = bankId
+        self.bankName = bankName
+        self.paymentAccountTypeRaw = paymentAccountTypeRaw
+        self.cardTail = cardTail
     }
 }
 

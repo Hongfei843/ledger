@@ -11,6 +11,10 @@ struct EntrySheetPrefill {
     var occurredAt: Date? = nil
     var accountId: UUID? = nil
     var hint: String? = nil
+    var detectedBankId: String? = nil
+    var detectedBankName: String? = nil
+    var detectedCardTail: String? = nil
+    var detectedAccountTypeRaw: String? = nil
 }
 
 extension EntrySheetPrefill {
@@ -23,7 +27,18 @@ extension EntrySheetPrefill {
         } else {
             hint = "已从截图识别，请核对"
         }
-        self.init(amountMinor: draft.amountMinor, payee: draft.payee, note: nil, occurredAt: nil, accountId: nil, hint: hint)
+        self.init(
+            amountMinor: draft.amountMinor,
+            payee: draft.payee,
+            note: nil,
+            occurredAt: nil,
+            accountId: nil,
+            hint: hint,
+            detectedBankId: draft.bankId,
+            detectedBankName: draft.bankName,
+            detectedCardTail: draft.cardTail,
+            detectedAccountTypeRaw: draft.paymentAccountTypeRaw
+        )
     }
 }
 
@@ -55,13 +70,16 @@ struct EntrySheet: View {
     @State private var templateName = ""
     @State private var accountUsage: [UUID: Int] = [:]
     @State private var balanceCache: [UUID: Int64] = [:]
+    @State private var showAddDetectedAccount = false
 
     /// 传入已有流水表示编辑模式；onSaved 用于父视图展示保存反馈
     private let editingTxn: Txn?
+    private let prefill: EntrySheetPrefill?
     private let onSaved: ((String) -> Void)?
 
     init(editingTxn: Txn? = nil, prefill: EntrySheetPrefill? = nil, onSaved: ((String) -> Void)? = nil) {
         self.editingTxn = editingTxn
+        self.prefill = prefill
         self.onSaved = onSaved
 
         let initialAmount: String
@@ -105,6 +123,33 @@ struct EntrySheet: View {
         baseAccounts.filter { $0.id != selectedAccountId }
     }
 
+    /// OCR 识别到的付款方式
+    private var detectedPaymentDraft: DetectedPaymentMethod? {
+        guard let prefill, let bankName = prefill.detectedBankName, !bankName.isEmpty else { return nil }
+        let type = prefill.detectedAccountTypeRaw.flatMap { AccountType(rawValue: $0) } ?? .debit
+        return DetectedPaymentMethod(
+            bankId: prefill.detectedBankId,
+            bankName: bankName,
+            accountType: type,
+            cardTail: prefill.detectedCardTail
+        )
+    }
+
+    /// 账户里是否已经有这张卡
+    private var detectedMatchedAccount: Account? {
+        guard let detected = detectedPaymentDraft else { return nil }
+        if let tail = detected.cardTail, !tail.isEmpty {
+            if let exact = filteredAccounts.first(where: { $0.cardTail == tail }) {
+                return exact
+            }
+        }
+        if let bankId = detected.bankId {
+            return filteredAccounts.first { $0.bankId == bankId && $0.type == detected.accountType }
+                ?? filteredAccounts.first { $0.bankId == bankId }
+        }
+        return nil
+    }
+
     /// 每个分类的累计记账笔数。只在出现时算一次，避免每次渲染都扫全表。
     @State private var usageCache: [UUID: Int] = [:]
 
@@ -142,6 +187,10 @@ struct EntrySheet: View {
             VStack(spacing: 0) {
                 typePicker
                 amountDisplay
+
+                if editingTxn == nil, let detected = detectedPaymentDraft, detectedMatchedAccount == nil {
+                    detectedPaymentBanner(detected)
+                }
 
                 if selectedType != .transfer, !activeTemplates.isEmpty {
                     templateStrip
@@ -193,6 +242,21 @@ struct EntrySheet: View {
                 Task { await recognize(item) }
             }
             .onAppear(perform: prepareDefaults)
+            .sheet(isPresented: $showAddDetectedAccount, onDismiss: {
+                if let matched = detectedMatchedAccount {
+                    selectedAccountId = matched.id
+                }
+            }) {
+                if let detected = detectedPaymentDraft {
+                    AccountEditView(
+                        account: nil,
+                        prefillName: detected.suggestedAccountName,
+                        prefillBankId: detected.bankId,
+                        prefillCardTail: detected.cardTail ?? "",
+                        prefillType: detected.accountType
+                    )
+                }
+            }
             .alert("保存为常用组合", isPresented: $showSaveTemplate) {
                 TextField("名称，如 星巴克拿铁", text: $templateName)
                 Button("保存") { saveAsTemplate() }
@@ -260,6 +324,28 @@ struct EntrySheet: View {
                     .padding(.bottom, 2)
             }
         }
+    }
+
+    private func detectedPaymentBanner(_ detected: DetectedPaymentMethod) -> some View {
+        HStack(spacing: Theme.Spacing.s) {
+            Image(systemName: "creditcard")
+                .foregroundStyle(Theme.warning)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("识别到付款方式：\(detected.displayName)")
+                    .font(.caption)
+                Text("账户里还没有这张卡，先添加账户或选择其他账户")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("添加") {
+                showAddDetectedAccount = true
+            }
+            .font(.caption.weight(.semibold))
+            .buttonStyle(.bordered)
+        }
+        .padding(.horizontal, Theme.Spacing.l)
+        .padding(.bottom, Theme.Spacing.xs)
     }
 
     private var categoryGrid: some View {
@@ -585,6 +671,9 @@ struct EntrySheet: View {
     // MARK: - 逻辑
 
     private func prepareDefaults() {
+        if selectedAccountId == nil, let detected = detectedMatchedAccount {
+            selectedAccountId = detected.id
+        }
         if selectedAccountId == nil {
             // 优先复用上次用的账户，其次第一个
             if let raw = UserDefaults.standard.string(forKey: Self.lastAccountKey),

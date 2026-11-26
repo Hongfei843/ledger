@@ -110,6 +110,27 @@ struct PeriodRange: Equatable {
         return next
     }
 
+    /// 顶栏用的紧凑标题：11月 / 3月5日 / 3.1–3.10 / 2026年
+    var compactTitle: String {
+        let calendar = AppCalendar.gregorian
+        switch kind {
+        case .day:
+            let comps = calendar.dateComponents([.month, .day], from: anchor)
+            return "\(comps.month ?? 0)月\(comps.day ?? 0)日"
+        case .week, .custom:
+            let range = interval(calendar: calendar)
+            let lastDay = calendar.date(byAdding: .day, value: -1, to: range.end) ?? range.start
+            return "\(DateFormatter.ledgerShort.string(from: range.start))–\(DateFormatter.ledgerShort.string(from: lastDay))"
+        case .month:
+            let comps = calendar.dateComponents([.year, .month], from: anchor)
+            let isThisYear = (comps.year ?? 0) == calendar.component(.year, from: Date())
+            let monthText = "\(comps.month ?? 0)月"
+            return isThisYear ? monthText : "\(comps.year ?? 0)年\(monthText)"
+        case .year:
+            return "\(calendar.component(.year, from: anchor))年"
+        }
+    }
+
     /// 选中周/月/年时，列表是否按天分组
     var groupsByDay: Bool { true }
 

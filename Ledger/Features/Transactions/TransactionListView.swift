@@ -428,7 +428,7 @@ struct TransactionListView: View {
             }
         } label: {
             HStack(spacing: 4) {
-                Text(period.title())
+                Text(period.compactTitle)
                     .font(.system(size: 15, weight: .semibold))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .semibold))

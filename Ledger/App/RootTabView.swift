@@ -13,6 +13,7 @@ struct RootTabView: View {
     @State private var showPrivacyShield = false
 
     @State private var showOnboarding = false
+    @State private var showQuickEntry = false
 
     /// 从系统「分享到本应用」或「用其他应用打开」传进来的文件
     @State private var sharedFile: SharedFile?
@@ -67,11 +68,17 @@ struct RootTabView: View {
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView()
         }
+        .sheet(isPresented: $showQuickEntry) {
+            EntrySheet()
+                .presentationDetents([.large])
+        }
         .overlay {
             if lockEnabled && !unlocked {
                 LockScreenView { unlocked = true }
+                    .transition(.identity)
             }
         }
+        .animation(nil, value: unlocked)
         .overlay {
             if showPrivacyShield {
                 PrivacyShieldView()
@@ -97,8 +104,16 @@ struct RootTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .screenshotImportReady)) { _ in
             takePendingScreenshotDraft()
         }
+        .onReceive(NotificationCenter.default.publisher(for: AppDelegate.quickActionNotification)) { note in
+            if let type = note.object as? String {
+                handleQuickAction(type)
+            }
+        }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
+            if let pending = UserDefaults.standard.string(forKey: AppDelegate.pendingQuickActionKey) {
+                handleQuickAction(pending)
+            }
             // 补记周期交易（房租、订阅等），失败不影响启动
             _ = RecurringService.run(context: context)
             if !onboardingCompleted {
@@ -107,6 +122,20 @@ struct RootTabView: View {
             // 快捷指令拉起 App 时，识别结果可能比 UI 晚一点点
             try? await Task.sleep(nanoseconds: 600_000_000)
             takePendingScreenshotDraft()
+        }
+    }
+
+    // MARK: - 快速启动（长按桌面图标）
+
+    private func handleQuickAction(_ type: String) {
+        UserDefaults.standard.removeObject(forKey: AppDelegate.pendingQuickActionKey)
+        switch type {
+        case AppDelegate.entryAction:
+            showQuickEntry = true
+        case AppDelegate.screenshotAction:
+            importScreenshotFromInbox()
+        default:
+            break
         }
     }
 

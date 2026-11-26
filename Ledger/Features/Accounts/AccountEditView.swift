@@ -5,6 +5,12 @@ struct AccountEditView: View {
     /// nil 表示新建
     let account: Account?
 
+    // 新建时的预填（用于 OCR 识别付款方式后一键添加）
+    var prefillName: String = ""
+    var prefillBankId: String? = nil
+    var prefillCardTail: String = ""
+    var prefillType: AccountType? = nil
+
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query private var books: [Book]
@@ -142,7 +148,16 @@ struct AccountEditView: View {
         return "该账户有 \(count) 笔历史流水。删除后这些记录完整保留（明细里仍显示账户名），只是不能再选它记账。卡停用、平台注销时用删除更合适。"
     }
 
-    private func load() {        guard let account else { return }
+    private func load() {
+        guard let account else {
+            if !prefillName.isEmpty {
+                name = prefillName
+                bankId = prefillBankId
+                cardTail = prefillCardTail
+                type = prefillType ?? type
+            }
+            return
+        }
         name = account.name
         bankId = account.bankId
         cardTail = account.cardTail ?? ""

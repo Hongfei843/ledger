@@ -10,16 +10,20 @@ enum SeedData {
     }
 
     private static let versionKey = "seed.categories.version"
-    static let currentVersion = 5
+    static let currentVersion = 6
 
     static let expenseCategories: [CategorySeed] = [
         CategorySeed(name: "餐饮", emoji: "🍜"),
+        CategorySeed(name: "买菜", emoji: "🥬"),
         CategorySeed(name: "交通", emoji: "🚇"),
         CategorySeed(name: "购物", emoji: "🛍️"),
         CategorySeed(name: "日用", emoji: "🧻"),
         CategorySeed(name: "居住", emoji: "🏠"),
         CategorySeed(name: "房租", emoji: "🔑"),
-        CategorySeed(name: "水电燃气", emoji: "💡"),
+        CategorySeed(name: "水费", emoji: "🚰"),
+        CategorySeed(name: "电费", emoji: "⚡"),
+        CategorySeed(name: "燃气费", emoji: "🔥"),
+        CategorySeed(name: "物业费", emoji: "🏢"),
         CategorySeed(name: "通讯", emoji: "📱"),
         CategorySeed(name: "娱乐", emoji: "🎮"),
         CategorySeed(name: "医疗", emoji: "💊"),
@@ -29,6 +33,8 @@ enum SeedData {
         CategorySeed(name: "宠物", emoji: "🐱"),
         CategorySeed(name: "母婴", emoji: "🍼"),
         CategorySeed(name: "订阅服务", emoji: "🔔"),
+        CategorySeed(name: "运动健身", emoji: "🏃"),
+        CategorySeed(name: "捐款", emoji: "🤝"),
         CategorySeed(name: "利息支出", emoji: "🏦"),
         CategorySeed(name: "手续费", emoji: "🧾"),
         CategorySeed(name: "保险", emoji: "🛡️"),
@@ -43,6 +49,7 @@ enum SeedData {
         CategorySeed(name: "兼职", emoji: "💼"),
         CategorySeed(name: "报销收入", emoji: "🧾"),
         CategorySeed(name: "投资收益", emoji: "📈"),
+        CategorySeed(name: "利息收入", emoji: "🏦"),
         CategorySeed(name: "红包", emoji: "🧧"),
         CategorySeed(name: "退款", emoji: "↩️"),
         CategorySeed(name: "其他", emoji: "📦")
@@ -54,7 +61,7 @@ enum SeedData {
         "咖啡奶茶": "餐饮", "外卖": "餐饮", "买菜": "餐饮", "水果": "餐饮", "零食": "餐饮", "烟酒": "餐饮",
         "打车": "交通", "公交地铁": "交通", "加油": "交通", "停车": "交通",
         "服饰": "购物", "美妆": "购物", "数码": "购物", "家装": "购物",
-        "物业": "居住", "宽带": "居住", "电费": "水电燃气", "水费": "水电燃气",
+        "物业": "居住", "宽带": "居住",
         "电影": "娱乐", "健身": "娱乐",
         "药品": "医疗", "体检": "医疗",
         "书籍": "教育",
@@ -82,6 +89,9 @@ enum SeedData {
 
         consolidateCategories(context: context, bookId: book.id)
         topUpCategories(context: context, bookId: book.id)
+        if storedVersion < 6 {
+            deprecateUtilitiesCategory(context: context)
+        }
         UserDefaults.standard.set(currentVersion, forKey: versionKey)
     }
 
@@ -176,6 +186,16 @@ enum SeedData {
             )
             context.insert(category)
         }
+    }
+
+    /// v6：水电燃气拆成水费/电费/燃气费，旧分类归档（历史流水保留原分类）。
+    private static func deprecateUtilitiesCategory(context: ModelContext) {
+        let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
+        for category in categories where category.name == "水电燃气" && !category.isArchived {
+            category.isArchived = true
+            category.updatedAt = Date()
+        }
+        try? context.save()
     }
 
     /// 老用户升级：只补缺失的分类，不覆盖已有名称与排序偏好。
