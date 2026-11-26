@@ -34,7 +34,7 @@ struct TransactionListView: View {
     @State private var deletedBuffer: [Txn] = []
     @State private var screenshotItem: PhotosPickerItem?
     @State private var isScreenshotBusy = false
-    @State private var quickEntryAccount: Account?
+
 
     private struct ToastState: Equatable {
         let message: String
@@ -320,6 +320,9 @@ struct TransactionListView: View {
             .navigationTitle("明细")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    periodMenu
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     PhotosPicker(selection: $screenshotItem, matching: .images, photoLibrary: .shared()) {
                         if isScreenshotBusy {
@@ -368,13 +371,6 @@ struct TransactionListView: View {
                 }
                 .presentationDetents([.large])
             }
-            .sheet(item: $quickEntryAccount) { account in
-                EntrySheet(prefill: EntrySheetPrefill(
-                    accountId: account.id,
-                    hint: "已选择账户：\(account.name)"
-                ))
-                .presentationDetents([.large])
-            }
             .sheet(isPresented: $showCustomRange) {
                 customRangeSheet
                     .presentationDetents([.height(300)])
@@ -397,52 +393,50 @@ struct TransactionListView: View {
 
     // MARK: - 周期切换
 
-    private var periodBar: some View {
-        HStack(spacing: Theme.Spacing.s) {
+    private var periodMenu: some View {
+        Menu {
             Button {
                 period = period.shifted(by: -1)
             } label: {
-                Image(systemName: "chevron.left")
-                    .frame(width: 32, height: 32)
+                Label("上一期", systemImage: "chevron.left")
             }
-            .buttonStyle(.plain)
             .disabled(period.kind == .custom)
-
-            Spacer()
-
-            Menu {
-                ForEach(PeriodKind.allCases) { kind in
-                    Button(kind.displayName) {
-                        if kind == .custom {
-                            showCustomRange = true
-                        } else {
-                            period = PeriodRange(kind: kind, anchor: period.anchor)
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(period.title())
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Spacer()
 
             Button {
                 period = period.shifted(by: 1)
             } label: {
-                Image(systemName: "chevron.right")
-                    .frame(width: 32, height: 32)
+                Label("下一期", systemImage: "chevron.right")
             }
-            .buttonStyle(.plain)
             .disabled(period.kind == .custom)
+
+            Divider()
+
+            ForEach(PeriodKind.allCases) { kind in
+                Button {
+                    if kind == .custom {
+                        showCustomRange = true
+                    } else {
+                        period = PeriodRange(kind: kind, anchor: period.anchor)
+                    }
+                } label: {
+                    if period.kind == kind {
+                        Label(kind.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(kind.displayName)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(period.title())
+                    .font(.system(size: 15, weight: .semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
         }
-        .padding(.horizontal, Theme.Spacing.xs)
+        .accessibilityLabel("当前周期 \(period.title())")
     }
 
     private var customRangeSheet: some View {
@@ -476,15 +470,8 @@ struct TransactionListView: View {
 
     private func homeHeader(_ balances: [UUID: Int64]) -> some View {
         VStack(spacing: Theme.Spacing.m) {
-            periodBar
-                .padding(.horizontal, Theme.Spacing.s)
-
             monthSummaryCard(balances)
                 .padding(.horizontal, Theme.Spacing.l)
-
-            if !cardAccounts.isEmpty {
-                accountStrip(balances)
-            }
         }
         .padding(.top, Theme.Spacing.xs)
         .padding(.bottom, Theme.Spacing.s)
@@ -604,82 +591,6 @@ struct TransactionListView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
-    }
-
-    /// 首页账户横滑卡片
-    private var cardAccounts: [Account] {
-        accounts
-            .filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
-            .sorted { $0.sortOrder < $1.sortOrder }
-    }
-
-    private func accountStrip(_ balances: [UUID: Int64]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Theme.Spacing.m) {
-                ForEach(cardAccounts, id: \.id) { account in
-                    NavigationLink {
-                        AccountDetailView(account: account)
-                    } label: {
-                        accountCard(account, balance: balances[account.id] ?? 0)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, Theme.Spacing.l)
-            .padding(.vertical, 2)
-        }
-    }
-
-    private func accountCard(_ account: Account, balance: Int64) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                BankMarkView(
-                    bankId: account.bankId,
-                    fallbackEmoji: account.iconEmoji,
-                    fallbackColorHex: account.colorHex,
-                    size: 22
-                )
-                Text(account.name)
-                    .font(.caption)
-                    .lineLimit(1)
-            }
-            Text(Money.format(balance))
-                .font(Theme.Fonts.amountM)
-                .monospacedDigit()
-                .foregroundStyle(balance < 0 ? Theme.danger : .primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
-            Text(accountSubtitle(account))
-                .font(.system(size: 9))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(width: 110, alignment: .leading)
-        .padding(Theme.Spacing.s + 2)
-        .cardStyle(radius: 14)
-        .contextMenu {
-            Button {
-                quickEntryAccount = account
-            } label: {
-                Label("记一笔到\(account.name)", systemImage: "square.and.pencil")
-            }
-        }
-    }
-
-    private func accountSubtitle(_ account: Account) -> String {
-        if account.type.isCreditLike,
-           let info = CreditCardBillService.info(for: account, txns: activeTxns, statements: statements) {
-            let due = DateFormatter.ledgerShort.string(from: info.dueDate)
-            if let statement = info.registered {
-                return "待还 \(Money.format(statement.outstandingMinor)) · \(due)"
-            }
-            if info.estimatedAmountMinor > 0 {
-                return "约 \(Money.format(info.estimatedAmountMinor)) · \(due)"
-            }
-            return "还款日 \(due)"
-        }
-        return account.type.displayName
     }
 
     private func reminderRow(_ item: DueReminder) -> some View {

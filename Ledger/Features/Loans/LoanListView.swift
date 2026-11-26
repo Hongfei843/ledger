@@ -40,8 +40,7 @@ struct LoanListView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
+        List {
                 Section {
                     summaryCard
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -69,10 +68,9 @@ struct LoanListView: View {
                     Button { showNew = true } label: { Image(systemName: "plus") }
                 }
             }
-            .sheet(isPresented: $showNew) {
-                NewLoanSheet()
-                    .presentationDetents([.large])
-            }
+        .sheet(isPresented: $showNew) {
+            NewLoanSheet()
+                .presentationDetents([.large])
         }
     }
 

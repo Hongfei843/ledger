@@ -54,6 +54,15 @@ struct StatsView: View {
             .background(Theme.pageBackground)
             .navigationTitle("统计")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        MonthlyReportView(month: monthAnchor)
+                    } label: {
+                        Label("月报", systemImage: "doc.text")
+                    }
+                }
+            }
         }
     }
 

@@ -32,8 +32,8 @@ struct RootTabView: View {
             ClaimListView()
                 .tabItem { Label("报销", systemImage: "doc.text") }
 
-            LoanListView()
-                .tabItem { Label("负债", systemImage: "creditcard") }
+            AssetsHomeView()
+                .tabItem { Label("资产", systemImage: "building.columns") }
 
             SettingsView()
                 .tabItem { Label("我的", systemImage: "person") }

@@ -26,33 +26,18 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("数据") {
-                    NavigationLink("账户管理") {
-                        AccountsView()
-                    }
+                Section("记账") {
                     NavigationLink("分类管理") {
                         CategoryManageView()
-                    }
-                    NavigationLink("对账") {
-                        ReconciliationView()
-                    }
-                    NavigationLink("资产总览") {
-                        AssetOverviewView()
-                    }
-                    NavigationLink("资金计划") {
-                        CashFlowPlanView()
-                    }
-                    NavigationLink("周期记账") {
-                        RecurringListView()
                     }
                     NavigationLink("常用组合") {
                         QuickTemplateListView()
                     }
-                    NavigationLink("借入借出") {
-                        DebtListView()
+                    NavigationLink("周期记账") {
+                        RecurringListView()
                     }
-                    NavigationLink("数据健康") {
-                        DataHealthView()
+                    NavigationLink("截图记账") {
+                        ScreenshotGuideView()
                     }
                     NavigationLink("导入账单") {
                         ImportView()
@@ -60,8 +45,31 @@ struct SettingsView: View {
                     NavigationLink("账单比对") {
                         BillCompareView()
                     }
-                    NavigationLink("截图记账") {
-                        ScreenshotGuideView()
+                }
+
+                Section("资产") {
+                    NavigationLink("账户管理") {
+                        AccountsView()
+                    }
+                    NavigationLink("资产总览") {
+                        AssetOverviewView()
+                    }
+                    NavigationLink("资金计划") {
+                        CashFlowPlanView()
+                    }
+                    NavigationLink("对账") {
+                        ReconciliationView()
+                    }
+                    NavigationLink("借入借出") {
+                        DebtListView()
+                    }
+                }
+
+                Section("数据") {
+                    LabeledContent("流水条数", value: "\(liveTxns.count)")
+                    LabeledContent("账户数", value: "\(accounts.filter { $0.deletedAt == nil }.count)")
+                    NavigationLink("数据健康") {
+                        DataHealthView()
                     }
                     NavigationLink("导出分析包") {
                         ExportView()
@@ -69,8 +77,6 @@ struct SettingsView: View {
                     NavigationLink("备份与恢复") {
                         BackupRestoreView()
                     }
-                    LabeledContent("流水条数", value: "\(liveTxns.count)")
-                    LabeledContent("账户数", value: "\(accounts.filter { $0.deletedAt == nil }.count)")
                 }
 
                 Section("维护") {

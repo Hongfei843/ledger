@@ -17,6 +17,7 @@ struct AccountEditView: View {
     @State private var type: AccountType = .debit
     @State private var balanceText = "0"
     @State private var includeInNetWorth = true
+    @State private var costText = ""
     @State private var showBankPicker = false
     @State private var showDeleteConfirm = false
 
@@ -75,6 +76,17 @@ struct AccountEditView: View {
                     Toggle("计入净资产", isOn: $includeInNetWorth)
                 } header: {
                     Text(isEditing ? "期初余额（修改会影响当前余额）" : "期初余额")
+                }
+
+                if type == .investment {
+                    Section {
+                        TextField("持仓成本（元，可选）", text: $costText)
+                            .keyboardType(.numbersAndPunctuation)
+                    } header: {
+                        Text("投资持仓")
+                    } footer: {
+                        Text("填买入成本后，账户详情和资产页会显示浮动盈亏、收益率；不填则只显示市值。")
+                    }
                 }
 
                 if isEditing, let account {
@@ -137,12 +149,14 @@ struct AccountEditView: View {
         type = account.type
         balanceText = Money.rawText(account.openingBalanceMinor)
         includeInNetWorth = account.includeInNetWorth
+        costText = account.positionCostMinor.map { Money.rawText($0) } ?? ""
     }
 
     private func save() {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         let tail = String(cardTail.filter { $0.isNumber }.prefix(4))
         let opening = Money.parse(balanceText) ?? 0
+        let cost = Money.parse(costText)
         let preset = BankPreset.find(bankId)
 
         if let account {
@@ -152,6 +166,7 @@ struct AccountEditView: View {
             account.type = type
             account.openingBalanceMinor = opening
             account.includeInNetWorth = includeInNetWorth
+            account.positionCostMinor = type == .investment ? cost : nil
             account.iconEmoji = preset?.short.isEmpty == false ? "🏦" : account.iconEmoji
             if let preset { account.colorHex = preset.colorHex }
             account.updatedAt = Date()
@@ -169,6 +184,7 @@ struct AccountEditView: View {
             created.bankId = bankId
             created.cardTail = tail.isEmpty ? nil : tail
             created.includeInNetWorth = includeInNetWorth
+            created.positionCostMinor = type == .investment ? cost : nil
             context.insert(created)
         }
 

@@ -56,6 +56,7 @@ struct AccountDTO: Codable {
     var billDay: Int?
     var dueDay: Int?
     var contributionMonthlyMinor: Int64?
+    var positionCostMinor: Int64?
     var isRestricted: Bool
     var isSystem: Bool
     var linkedLoanId: UUID?
@@ -86,6 +87,7 @@ extension AccountDTO {
         self.billDay = model.billDay
         self.dueDay = model.dueDay
         self.contributionMonthlyMinor = model.contributionMonthlyMinor
+        self.positionCostMinor = model.positionCostMinor
         self.isRestricted = model.isRestricted
         self.isSystem = model.isSystem
         self.linkedLoanId = model.linkedLoanId
@@ -115,6 +117,7 @@ extension AccountDTO {
         model.billDay = billDay
         model.dueDay = dueDay
         model.contributionMonthlyMinor = contributionMonthlyMinor
+        model.positionCostMinor = positionCostMinor
         model.isRestricted = isRestricted
         model.isSystem = isSystem
         model.linkedLoanId = linkedLoanId

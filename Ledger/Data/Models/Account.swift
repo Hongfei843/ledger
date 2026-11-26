@@ -9,6 +9,7 @@ enum AccountType: String, CaseIterable, Identifiable, Codable {
     case bnpl
     case prepaid
     case providentFund
+    case investment
     case loan
     case other
 
@@ -23,6 +24,7 @@ enum AccountType: String, CaseIterable, Identifiable, Codable {
         case .bnpl: return "信用付"
         case .prepaid: return "储值卡"
         case .providentFund: return "公积金"
+        case .investment: return "投资理财"
         case .loan: return "贷款"
         case .other: return "其他"
         }
@@ -52,6 +54,8 @@ final class Account {
     var billDay: Int?
     var dueDay: Int?
     var contributionMonthlyMinor: Int64?
+    /// 投资账户的持仓成本（分），用于计算浮动盈亏；nil 表示未填。
+    var positionCostMinor: Int64?
     var isRestricted: Bool
     var isSystem: Bool
     var linkedLoanId: UUID?
@@ -91,6 +95,7 @@ final class Account {
         self.billDay = nil
         self.dueDay = nil
         self.contributionMonthlyMinor = nil
+        self.positionCostMinor = nil
         self.isRestricted = type == .providentFund
         self.isSystem = type == .loan
         self.linkedLoanId = nil

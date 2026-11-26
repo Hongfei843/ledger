@@ -55,6 +55,10 @@ struct AccountDetailView: View {
                 creditSection
             }
 
+            if account.type == .investment {
+                investmentSection
+            }
+
             Section {
                 HStack {
                     TextField("输入实际余额", text: $actualBalanceText)
@@ -150,6 +154,28 @@ struct AccountDetailView: View {
             }
         }
         .padding(.vertical, Theme.Spacing.s)
+    }
+
+    private var investmentSection: some View {
+        let position = InvestmentService.position(for: account, txns: allTxns)
+        let cost = account.positionCostMinor ?? 0
+        return Section("投资持仓") {
+            LabeledContent("市值", value: Money.format(balance))
+            if cost > 0, let position {
+                LabeledContent("持仓成本", value: Money.format(cost))
+                LabeledContent("浮动盈亏") {
+                    Text(Money.format(position.profitMinor, showSign: true))
+                        .foregroundStyle(position.profitMinor >= 0 ? Theme.income : Theme.danger)
+                }
+                if let rate = position.ratePercent {
+                    LabeledContent("收益率", value: String(format: "%+.2f%%", rate))
+                }
+            } else {
+                Text("去「编辑」填写持仓成本，就能看到浮动盈亏和收益率。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private var creditSection: some View {
