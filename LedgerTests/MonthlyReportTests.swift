@@ -9,8 +9,8 @@ final class MonthlyReportTests: XCTestCase {
         calendar.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
-    private func makeCategory(_ name: String) -> Category {
-        Category(bookId: UUID(), name: name, kind: .expense)
+    private func makeCategory(_ name: String) -> Ledger.Category {
+        Ledger.Category(bookId: UUID(), name: name, kind: .expense)
     }
 
     private func makeTxn(
