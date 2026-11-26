@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage(NotificationService.enabledKey) private var remindersEnabled = false
     @AppStorage("security.lockEnabled") private var lockEnabled = false
     @State private var currentIconName: String? = UIApplication.shared.alternateIconName
+    @State private var iconMessage: String?
 
     private struct AppIconOption: Identifiable {
         let id: String?
@@ -165,6 +166,17 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("我的")
+            .alert(
+                "应用图标",
+                isPresented: Binding(
+                    get: { iconMessage != nil },
+                    set: { if !$0 { iconMessage = nil } }
+                )
+            ) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(iconMessage ?? "")
+            }
         }
     }
 
@@ -191,11 +203,20 @@ struct SettingsView: View {
     }
 
     private func applyIcon(_ name: String?) {
-        guard UIApplication.shared.supportsAlternateIcons else { return }
+        guard UIApplication.shared.supportsAlternateIcons else {
+            iconMessage = "这台设备或这套安装方式不支持切换备用图标。"
+            return
+        }
         UIApplication.shared.setAlternateIconName(name) { error in
-            if error == nil {
-                currentIconName = name
-                Haptics.success()
+            DispatchQueue.main.async {
+                if let error {
+                    iconMessage = "切换图标失败：\(error.localizedDescription)"
+                    Haptics.warning()
+                } else {
+                    currentIconName = name
+                    iconMessage = name == nil ? "已切回默认图标。" : "已切换图标，回到桌面查看（系统可能延迟几秒）。"
+                    Haptics.success()
+                }
             }
         }
     }

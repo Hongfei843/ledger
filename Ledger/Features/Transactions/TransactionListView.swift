@@ -639,13 +639,11 @@ struct TransactionListView: View {
                 .foregroundStyle(balance < 0 ? Theme.danger : .primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
-            if let caption = creditCaption(account) {
-                Text(caption)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
+            Text(accountSubtitle(account))
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
         }
         .frame(width: 110, alignment: .leading)
         .padding(Theme.Spacing.s + 2)
@@ -659,19 +657,19 @@ struct TransactionListView: View {
         }
     }
 
-    private func creditCaption(_ account: Account) -> String? {
-        guard account.type.isCreditLike,
-              let info = CreditCardBillService.info(for: account, txns: activeTxns, statements: statements) else {
-            return nil
+    private func accountSubtitle(_ account: Account) -> String {
+        if account.type.isCreditLike,
+           let info = CreditCardBillService.info(for: account, txns: activeTxns, statements: statements) {
+            let due = DateFormatter.ledgerShort.string(from: info.dueDate)
+            if let statement = info.registered {
+                return "待还 \(Money.format(statement.outstandingMinor)) · \(due)"
+            }
+            if info.estimatedAmountMinor > 0 {
+                return "约 \(Money.format(info.estimatedAmountMinor)) · \(due)"
+            }
+            return "还款日 \(due)"
         }
-        let due = DateFormatter.ledgerShort.string(from: info.dueDate)
-        if let statement = info.registered {
-            return "待还 \(Money.format(statement.outstandingMinor)) · \(due)"
-        }
-        if info.estimatedAmountMinor > 0 {
-            return "本期约 \(Money.format(info.estimatedAmountMinor)) · \(due)"
-        }
-        return "还款日 \(due)"
+        return account.type.displayName
     }
 
     private func reminderRow(_ item: DueReminder) -> some View {

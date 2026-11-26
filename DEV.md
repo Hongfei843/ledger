@@ -93,6 +93,7 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 要点：
 - 不手写 `.xcodeproj`，由 `project.yml` 生成
 - 必须保留 `ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES`，否则备选图标变空白
+- App 图标必须带完整尺寸矩阵（20/29/40/60/76/83.5/1024，含 @2x/@3x）：只放 1024 单尺寸时，重签安装后桌面可能空白；四套图标（AppIcon/Chart/Coin/Minimal）都要保持一致
 - 版本号由 CI 注入 `1.0.<run_number>`
 - 只在 workflow_dispatch 触发；推送后跑 `.gh/ci.ps1` 主动构建（push 不再自动跑，避免重复排队）
 - 标准 runner 合法标签（见 `actions/runner-images` README）：`macos-15-intel`（**默认，x64 池，2026-11-25 实测可用**）、`macos-15`（arm64 池，容量紧张）、`macos-26`（arm64）、`xcode-27-arm64`
