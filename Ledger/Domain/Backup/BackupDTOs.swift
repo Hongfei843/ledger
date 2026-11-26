@@ -1,5 +1,6 @@
 // 由 scripts/gen-backup-dtos.py 自动生成，勿手改。
 // 修改模型字段后，重新运行脚本生成。
+// 解码时对缺失字段给默认值：旧版本备份/未来新增字段都能尽量导入。
 import Foundation
 
 struct BookDTO: Codable {
@@ -13,6 +14,10 @@ struct BookDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, iconEmoji, colorHex, sortOrder, isDefault, isArchived, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension BookDTO {
@@ -40,6 +45,21 @@ extension BookDTO {
         model.createdAt = createdAt
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
+    }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        self.iconEmoji = try container.decodeIfPresent(String.self, forKey: .iconEmoji) ?? ""
+        self.colorHex = try container.decodeIfPresent(String.self, forKey: .colorHex) ?? ""
+        self.sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        self.isDefault = try container.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
+        self.isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
     }
 }
 
@@ -71,6 +91,10 @@ struct AccountDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, bookId, name, typeRaw, institution, currencyCode, openingBalanceMinor, cachedBalanceMinor, creditLimitMinor, billDay, dueDay, contributionMonthlyMinor, positionCostMinor, isRestricted, isSystem, linkedLoanId, iconEmoji, colorHex, sortOrder, includeInNetWorth, isArchived, bankId, cardTail, lastReconciledAt, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension AccountDTO {
@@ -133,6 +157,38 @@ extension AccountDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.bookId = try container.decodeIfPresent(UUID.self, forKey: .bookId) ?? UUID()
+        self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        self.typeRaw = try container.decodeIfPresent(String.self, forKey: .typeRaw) ?? ""
+        self.institution = try container.decodeIfPresent(String.self, forKey: .institution)
+        self.currencyCode = try container.decodeIfPresent(String.self, forKey: .currencyCode) ?? ""
+        self.openingBalanceMinor = try container.decodeIfPresent(Int64.self, forKey: .openingBalanceMinor) ?? 0
+        self.cachedBalanceMinor = try container.decodeIfPresent(Int64.self, forKey: .cachedBalanceMinor) ?? 0
+        self.creditLimitMinor = try container.decodeIfPresent(Int64.self, forKey: .creditLimitMinor)
+        self.billDay = try container.decodeIfPresent(Int.self, forKey: .billDay)
+        self.dueDay = try container.decodeIfPresent(Int.self, forKey: .dueDay)
+        self.contributionMonthlyMinor = try container.decodeIfPresent(Int64.self, forKey: .contributionMonthlyMinor)
+        self.positionCostMinor = try container.decodeIfPresent(Int64.self, forKey: .positionCostMinor)
+        self.isRestricted = try container.decodeIfPresent(Bool.self, forKey: .isRestricted) ?? false
+        self.isSystem = try container.decodeIfPresent(Bool.self, forKey: .isSystem) ?? false
+        self.linkedLoanId = try container.decodeIfPresent(UUID.self, forKey: .linkedLoanId)
+        self.iconEmoji = try container.decodeIfPresent(String.self, forKey: .iconEmoji) ?? ""
+        self.colorHex = try container.decodeIfPresent(String.self, forKey: .colorHex) ?? ""
+        self.sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        self.includeInNetWorth = try container.decodeIfPresent(Bool.self, forKey: .includeInNetWorth) ?? false
+        self.isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+        self.bankId = try container.decodeIfPresent(String.self, forKey: .bankId)
+        self.cardTail = try container.decodeIfPresent(String.self, forKey: .cardTail)
+        self.lastReconciledAt = try container.decodeIfPresent(Date.self, forKey: .lastReconciledAt)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct CategoryDTO: Codable {
@@ -149,6 +205,10 @@ struct CategoryDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, bookId, name, kindRaw, parentId, iconEmoji, colorHex, sortOrder, defaultReimbursable, isArchived, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension CategoryDTO {
@@ -183,6 +243,24 @@ extension CategoryDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.bookId = try container.decodeIfPresent(UUID.self, forKey: .bookId) ?? UUID()
+        self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        self.kindRaw = try container.decodeIfPresent(String.self, forKey: .kindRaw) ?? ""
+        self.parentId = try container.decodeIfPresent(UUID.self, forKey: .parentId)
+        self.iconEmoji = try container.decodeIfPresent(String.self, forKey: .iconEmoji) ?? ""
+        self.colorHex = try container.decodeIfPresent(String.self, forKey: .colorHex) ?? ""
+        self.sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        self.defaultReimbursable = try container.decodeIfPresent(Bool.self, forKey: .defaultReimbursable) ?? false
+        self.isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct TxnDTO: Codable {
@@ -209,6 +287,10 @@ struct TxnDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, bookId, typeRaw, amountMinor, accountId, counterAccountId, categoryId, occurredAt, payee, note, isReimbursable, claimId, refundOfTxnId, loanId, loanScheduleItemId, principalMinor, interestMinor, sourceRaw, externalId, captureId, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension TxnDTO {
@@ -263,6 +345,34 @@ extension TxnDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.bookId = try container.decodeIfPresent(UUID.self, forKey: .bookId) ?? UUID()
+        self.typeRaw = try container.decodeIfPresent(String.self, forKey: .typeRaw) ?? ""
+        self.amountMinor = try container.decodeIfPresent(Int64.self, forKey: .amountMinor) ?? 0
+        self.accountId = try container.decodeIfPresent(UUID.self, forKey: .accountId) ?? UUID()
+        self.counterAccountId = try container.decodeIfPresent(UUID.self, forKey: .counterAccountId)
+        self.categoryId = try container.decodeIfPresent(UUID.self, forKey: .categoryId)
+        self.occurredAt = try container.decodeIfPresent(Date.self, forKey: .occurredAt) ?? Date(timeIntervalSince1970: 0)
+        self.payee = try container.decodeIfPresent(String.self, forKey: .payee)
+        self.note = try container.decodeIfPresent(String.self, forKey: .note)
+        self.isReimbursable = try container.decodeIfPresent(Bool.self, forKey: .isReimbursable) ?? false
+        self.claimId = try container.decodeIfPresent(UUID.self, forKey: .claimId)
+        self.refundOfTxnId = try container.decodeIfPresent(UUID.self, forKey: .refundOfTxnId)
+        self.loanId = try container.decodeIfPresent(UUID.self, forKey: .loanId)
+        self.loanScheduleItemId = try container.decodeIfPresent(UUID.self, forKey: .loanScheduleItemId)
+        self.principalMinor = try container.decodeIfPresent(Int64.self, forKey: .principalMinor)
+        self.interestMinor = try container.decodeIfPresent(Int64.self, forKey: .interestMinor)
+        self.sourceRaw = try container.decodeIfPresent(String.self, forKey: .sourceRaw) ?? ""
+        self.externalId = try container.decodeIfPresent(String.self, forKey: .externalId)
+        self.captureId = try container.decodeIfPresent(UUID.self, forKey: .captureId)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct ClaimDTO: Codable {
@@ -280,6 +390,10 @@ struct ClaimDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, bookId, title, periodMonth, statusRaw, submittedAt, reimbursedAt, receivedAmountMinor, receivedAccountId, shortfallMinor, note, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension ClaimDTO {
@@ -316,6 +430,25 @@ extension ClaimDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.bookId = try container.decodeIfPresent(UUID.self, forKey: .bookId) ?? UUID()
+        self.title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        self.periodMonth = try container.decodeIfPresent(String.self, forKey: .periodMonth) ?? ""
+        self.statusRaw = try container.decodeIfPresent(String.self, forKey: .statusRaw) ?? ""
+        self.submittedAt = try container.decodeIfPresent(Date.self, forKey: .submittedAt)
+        self.reimbursedAt = try container.decodeIfPresent(Date.self, forKey: .reimbursedAt)
+        self.receivedAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .receivedAmountMinor)
+        self.receivedAccountId = try container.decodeIfPresent(UUID.self, forKey: .receivedAccountId)
+        self.shortfallMinor = try container.decodeIfPresent(Int64.self, forKey: .shortfallMinor) ?? 0
+        self.note = try container.decodeIfPresent(String.self, forKey: .note)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct LoanDTO: Codable {
@@ -341,6 +474,10 @@ struct LoanDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, bookId, name, typeRaw, lender, principalMinor, outstandingPrincipalMinor, annualRateBp, termMonths, startDate, firstDueDate, dueDay, repaymentMethodRaw, paymentAccountId, providentAccountId, providentModeRaw, fundingSourceRaw, statusRaw, note, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension LoanDTO {
@@ -393,6 +530,33 @@ extension LoanDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.bookId = try container.decodeIfPresent(UUID.self, forKey: .bookId) ?? UUID()
+        self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        self.typeRaw = try container.decodeIfPresent(String.self, forKey: .typeRaw) ?? ""
+        self.lender = try container.decodeIfPresent(String.self, forKey: .lender)
+        self.principalMinor = try container.decodeIfPresent(Int64.self, forKey: .principalMinor) ?? 0
+        self.outstandingPrincipalMinor = try container.decodeIfPresent(Int64.self, forKey: .outstandingPrincipalMinor) ?? 0
+        self.annualRateBp = try container.decodeIfPresent(Int.self, forKey: .annualRateBp) ?? 0
+        self.termMonths = try container.decodeIfPresent(Int.self, forKey: .termMonths) ?? 0
+        self.startDate = try container.decodeIfPresent(Date.self, forKey: .startDate) ?? Date(timeIntervalSince1970: 0)
+        self.firstDueDate = try container.decodeIfPresent(Date.self, forKey: .firstDueDate) ?? Date(timeIntervalSince1970: 0)
+        self.dueDay = try container.decodeIfPresent(Int.self, forKey: .dueDay) ?? 0
+        self.repaymentMethodRaw = try container.decodeIfPresent(String.self, forKey: .repaymentMethodRaw) ?? ""
+        self.paymentAccountId = try container.decodeIfPresent(UUID.self, forKey: .paymentAccountId) ?? UUID()
+        self.providentAccountId = try container.decodeIfPresent(UUID.self, forKey: .providentAccountId)
+        self.providentModeRaw = try container.decodeIfPresent(String.self, forKey: .providentModeRaw) ?? ""
+        self.fundingSourceRaw = try container.decodeIfPresent(String.self, forKey: .fundingSourceRaw) ?? ""
+        self.statusRaw = try container.decodeIfPresent(String.self, forKey: .statusRaw) ?? ""
+        self.note = try container.decodeIfPresent(String.self, forKey: .note)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct LoanScheduleItemDTO: Codable {
@@ -415,6 +579,10 @@ struct LoanScheduleItemDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, loanId, periodIndex, dueDate, principalMinor, interestMinor, feeMinor, isPaid, paidAt, paidAmountMinor, fundingSourceRaw, cashPaidMinor, providentPaidMinor, paymentTxnId, interestTxnId, isAdjusted, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension LoanScheduleItemDTO {
@@ -461,6 +629,30 @@ extension LoanScheduleItemDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.loanId = try container.decodeIfPresent(UUID.self, forKey: .loanId) ?? UUID()
+        self.periodIndex = try container.decodeIfPresent(Int.self, forKey: .periodIndex) ?? 0
+        self.dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate) ?? Date(timeIntervalSince1970: 0)
+        self.principalMinor = try container.decodeIfPresent(Int64.self, forKey: .principalMinor) ?? 0
+        self.interestMinor = try container.decodeIfPresent(Int64.self, forKey: .interestMinor) ?? 0
+        self.feeMinor = try container.decodeIfPresent(Int64.self, forKey: .feeMinor) ?? 0
+        self.isPaid = try container.decodeIfPresent(Bool.self, forKey: .isPaid) ?? false
+        self.paidAt = try container.decodeIfPresent(Date.self, forKey: .paidAt)
+        self.paidAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .paidAmountMinor)
+        self.fundingSourceRaw = try container.decodeIfPresent(String.self, forKey: .fundingSourceRaw) ?? ""
+        self.cashPaidMinor = try container.decodeIfPresent(Int64.self, forKey: .cashPaidMinor) ?? 0
+        self.providentPaidMinor = try container.decodeIfPresent(Int64.self, forKey: .providentPaidMinor) ?? 0
+        self.paymentTxnId = try container.decodeIfPresent(UUID.self, forKey: .paymentTxnId)
+        self.interestTxnId = try container.decodeIfPresent(UUID.self, forKey: .interestTxnId)
+        self.isAdjusted = try container.decodeIfPresent(Bool.self, forKey: .isAdjusted) ?? false
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct StatementDTO: Codable {
@@ -477,6 +669,10 @@ struct StatementDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, accountId, periodMonth, billAmountMinor, minimumPaymentMinor, paidAmountMinor, dueDate, paidAt, statusRaw, note, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension StatementDTO {
@@ -511,6 +707,24 @@ extension StatementDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.accountId = try container.decodeIfPresent(UUID.self, forKey: .accountId) ?? UUID()
+        self.periodMonth = try container.decodeIfPresent(String.self, forKey: .periodMonth) ?? ""
+        self.billAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .billAmountMinor) ?? 0
+        self.minimumPaymentMinor = try container.decodeIfPresent(Int64.self, forKey: .minimumPaymentMinor) ?? 0
+        self.paidAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .paidAmountMinor) ?? 0
+        self.dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate) ?? Date(timeIntervalSince1970: 0)
+        self.paidAt = try container.decodeIfPresent(Date.self, forKey: .paidAt)
+        self.statusRaw = try container.decodeIfPresent(String.self, forKey: .statusRaw) ?? ""
+        self.note = try container.decodeIfPresent(String.self, forKey: .note)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct ReconciliationRunDTO: Codable {
@@ -520,6 +734,10 @@ struct ReconciliationRunDTO: Codable {
     var accountCount: Int
     var diffCount: Int
     var totalDiffMinor: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case id, bookId, createdAt, accountCount, diffCount, totalDiffMinor
+    }
 }
 
 extension ReconciliationRunDTO {
@@ -540,6 +758,17 @@ extension ReconciliationRunDTO {
         model.diffCount = diffCount
         model.totalDiffMinor = totalDiffMinor
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.bookId = try container.decodeIfPresent(UUID.self, forKey: .bookId) ?? UUID()
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.accountCount = try container.decodeIfPresent(Int.self, forKey: .accountCount) ?? 0
+        self.diffCount = try container.decodeIfPresent(Int.self, forKey: .diffCount) ?? 0
+        self.totalDiffMinor = try container.decodeIfPresent(Int64.self, forKey: .totalDiffMinor) ?? 0
+    }
 }
 
 struct DebtDTO: Codable {
@@ -556,6 +785,10 @@ struct DebtDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, bookId, directionRaw, counterparty, amountMinor, occurredAt, dueDate, note, isSettled, settledAt, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension DebtDTO {
@@ -590,6 +823,24 @@ extension DebtDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.bookId = try container.decodeIfPresent(UUID.self, forKey: .bookId) ?? UUID()
+        self.directionRaw = try container.decodeIfPresent(String.self, forKey: .directionRaw) ?? ""
+        self.counterparty = try container.decodeIfPresent(String.self, forKey: .counterparty) ?? ""
+        self.amountMinor = try container.decodeIfPresent(Int64.self, forKey: .amountMinor) ?? 0
+        self.occurredAt = try container.decodeIfPresent(Date.self, forKey: .occurredAt) ?? Date(timeIntervalSince1970: 0)
+        self.dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
+        self.note = try container.decodeIfPresent(String.self, forKey: .note)
+        self.isSettled = try container.decodeIfPresent(Bool.self, forKey: .isSettled) ?? false
+        self.settledAt = try container.decodeIfPresent(Date.self, forKey: .settledAt)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct MerchantRuleDTO: Codable {
@@ -601,6 +852,10 @@ struct MerchantRuleDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, payeeKey, categoryId, hitCount, lastUsedAt, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension MerchantRuleDTO {
@@ -625,6 +880,19 @@ extension MerchantRuleDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.payeeKey = try container.decodeIfPresent(String.self, forKey: .payeeKey) ?? ""
+        self.categoryId = try container.decodeIfPresent(UUID.self, forKey: .categoryId) ?? UUID()
+        self.hitCount = try container.decodeIfPresent(Int.self, forKey: .hitCount) ?? 0
+        self.lastUsedAt = try container.decodeIfPresent(Date.self, forKey: .lastUsedAt) ?? Date(timeIntervalSince1970: 0)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct CaptureRecordDTO: Codable {
@@ -641,6 +909,10 @@ struct CaptureRecordDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, imagePath, ocrText, parsedAmountMinor, parsedPayee, parsedAccountId, parsedCategoryId, confidence, isAccepted, sourceType, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension CaptureRecordDTO {
@@ -675,6 +947,24 @@ extension CaptureRecordDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.imagePath = try container.decodeIfPresent(String.self, forKey: .imagePath)
+        self.ocrText = try container.decodeIfPresent(String.self, forKey: .ocrText) ?? ""
+        self.parsedAmountMinor = try container.decodeIfPresent(Int64.self, forKey: .parsedAmountMinor)
+        self.parsedPayee = try container.decodeIfPresent(String.self, forKey: .parsedPayee)
+        self.parsedAccountId = try container.decodeIfPresent(UUID.self, forKey: .parsedAccountId)
+        self.parsedCategoryId = try container.decodeIfPresent(UUID.self, forKey: .parsedCategoryId)
+        self.confidence = try container.decodeIfPresent(Double.self, forKey: .confidence) ?? 0
+        self.isAccepted = try container.decodeIfPresent(Bool.self, forKey: .isAccepted) ?? false
+        self.sourceType = try container.decodeIfPresent(String.self, forKey: .sourceType) ?? ""
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct RecurringRuleDTO: Codable {
@@ -696,6 +986,10 @@ struct RecurringRuleDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, bookId, title, templateTypeRaw, amountMinor, accountId, counterAccountId, categoryId, note, frequencyRaw, interval, startDate, nextDate, autoCreate, isPaused, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension RecurringRuleDTO {
@@ -740,6 +1034,29 @@ extension RecurringRuleDTO {
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
     }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.bookId = try container.decodeIfPresent(UUID.self, forKey: .bookId) ?? UUID()
+        self.title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        self.templateTypeRaw = try container.decodeIfPresent(String.self, forKey: .templateTypeRaw) ?? ""
+        self.amountMinor = try container.decodeIfPresent(Int64.self, forKey: .amountMinor) ?? 0
+        self.accountId = try container.decodeIfPresent(UUID.self, forKey: .accountId) ?? UUID()
+        self.counterAccountId = try container.decodeIfPresent(UUID.self, forKey: .counterAccountId)
+        self.categoryId = try container.decodeIfPresent(UUID.self, forKey: .categoryId)
+        self.note = try container.decodeIfPresent(String.self, forKey: .note)
+        self.frequencyRaw = try container.decodeIfPresent(String.self, forKey: .frequencyRaw) ?? ""
+        self.interval = try container.decodeIfPresent(Int.self, forKey: .interval) ?? 0
+        self.startDate = try container.decodeIfPresent(Date.self, forKey: .startDate) ?? Date(timeIntervalSince1970: 0)
+        self.nextDate = try container.decodeIfPresent(Date.self, forKey: .nextDate) ?? Date(timeIntervalSince1970: 0)
+        self.autoCreate = try container.decodeIfPresent(Bool.self, forKey: .autoCreate) ?? false
+        self.isPaused = try container.decodeIfPresent(Bool.self, forKey: .isPaused) ?? false
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
+    }
 }
 
 struct QuickTemplateDTO: Codable {
@@ -756,6 +1073,10 @@ struct QuickTemplateDTO: Codable {
     var createdAt: Date
     var updatedAt: Date
     var deletedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case id, bookId, name, typeRaw, amountMinor, accountId, categoryId, payee, note, sortOrder, createdAt, updatedAt, deletedAt
+    }
 }
 
 extension QuickTemplateDTO {
@@ -789,5 +1110,23 @@ extension QuickTemplateDTO {
         model.createdAt = createdAt
         model.updatedAt = updatedAt
         model.deletedAt = deletedAt
+    }
+
+    /// 宽容解码：缺失字段用默认值，兼容旧备份与后续新增字段。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.bookId = try container.decodeIfPresent(UUID.self, forKey: .bookId) ?? UUID()
+        self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        self.typeRaw = try container.decodeIfPresent(String.self, forKey: .typeRaw) ?? ""
+        self.amountMinor = try container.decodeIfPresent(Int64.self, forKey: .amountMinor)
+        self.accountId = try container.decodeIfPresent(UUID.self, forKey: .accountId)
+        self.categoryId = try container.decodeIfPresent(UUID.self, forKey: .categoryId)
+        self.payee = try container.decodeIfPresent(String.self, forKey: .payee)
+        self.note = try container.decodeIfPresent(String.self, forKey: .note)
+        self.sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        self.updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+        self.deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
     }
 }

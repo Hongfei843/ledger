@@ -129,6 +129,18 @@ enum BackupService {
     }
 
     static func decode(_ data: Data) throws -> LedgerBackup {
+        try decodeDetailed(data).backup
+    }
+
+    /// 宽容解码：支持当前/更早格式，以及旧版（schemaVersion = 1）备份。
+    static func decodeDetailed(_ data: Data) throws -> BackupDecodeResult {
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           object["formatVersion"] == nil,
+           object["schemaVersion"] is Int {
+            let legacy = try BackupCompatibility.decodeLegacyV1(data)
+            return BackupDecodeResult(backup: legacy, version: 1, isLegacy: true)
+        }
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let backup: LedgerBackup
@@ -137,10 +149,10 @@ enum BackupService {
         } catch {
             throw BackupError.invalidFormat
         }
-        guard backup.formatVersion == formatVersion else {
+        guard (1...formatVersion).contains(backup.formatVersion) else {
             throw BackupError.unsupportedVersion(backup.formatVersion)
         }
-        return backup
+        return BackupDecodeResult(backup: backup, version: backup.formatVersion, isLegacy: false)
     }
 
     /// 生成临时备份文件，供 ShareLink 分享。

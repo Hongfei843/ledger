@@ -198,8 +198,7 @@ struct BillCompareView: View {
     }
 
     private func decode(_ data: Data) -> String? {
-        if let text = String(data: data, encoding: .utf8) { return text }
-        return String(data: data, encoding: String.Encoding(rawValue: 0x80000632))
+        ImportTextDecoder.decode(data)
     }
 
     // MARK: - 补录

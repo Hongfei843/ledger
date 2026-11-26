@@ -16,6 +16,9 @@ struct BackupRestoreView: View {
     @State private var showImporter = false
     @State private var pendingBackup: LedgerBackup?
     @State private var pendingFileName = ""
+    @State private var pendingVersion = 2
+    @State private var pendingIsLegacy = false
+    @State private var pendingExportedAt: Date?
     @State private var isWorking = false
     @State private var message: String?
     @State private var errorMessage: String?
@@ -33,6 +36,17 @@ struct BackupRestoreView: View {
     private var pendingSummaryText: String {
         guard let pendingBackup else { return "" }
         return BackupCounts(backup: pendingBackup).summaryText
+    }
+
+    private var pendingMetaText: String {
+        var parts = ["格式 v\(pendingVersion)"]
+        if pendingIsLegacy {
+            parts.append("旧版备份，已自动补齐缺失字段")
+        }
+        if let pendingExportedAt {
+            parts.append("导出于 " + Self.displayFormatter.string(from: pendingExportedAt))
+        }
+        return parts.joined(separator: " · ")
     }
 
     private static let displayFormatter: DateFormatter = {
@@ -116,7 +130,7 @@ struct BackupRestoreView: View {
             Button("取消", role: .cancel) { pendingBackup = nil }
             Button("恢复", role: .destructive) { performRestore() }
         } message: {
-            Text("将用「\(pendingFileName)」覆盖当前全部数据。\n\n备份内容：\(pendingSummaryText)")
+            Text("将用「\(pendingFileName)」覆盖当前全部数据。\n\n\(pendingMetaText)\n备份内容：\(pendingSummaryText)")
         }
     }
 
@@ -149,9 +163,12 @@ struct BackupRestoreView: View {
                 if accessing { url.stopAccessingSecurityScopedResource() }
             }
             let data = try Data(contentsOf: url)
-            let backup = try BackupService.decode(data)
-            pendingBackup = backup
+            let result = try BackupService.decodeDetailed(data)
+            pendingBackup = result.backup
             pendingFileName = url.lastPathComponent
+            pendingVersion = result.version
+            pendingIsLegacy = result.isLegacy
+            pendingExportedAt = result.backup.exportedAt
             message = nil
             errorMessage = nil
         } catch {
@@ -169,6 +186,9 @@ struct BackupRestoreView: View {
             let result = try BackupService.restore(backup, into: context)
             lastRestoreTimestamp = Date().timeIntervalSince1970
             message = "恢复完成：\(result.counts.summaryText)"
+            if pendingIsLegacy {
+                message = "旧版备份已转换并恢复：\(result.counts.summaryText)"
+            }
             errorMessage = nil
             Haptics.success()
         } catch {

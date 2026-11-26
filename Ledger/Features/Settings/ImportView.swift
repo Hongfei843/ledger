@@ -258,9 +258,7 @@ struct ImportView: View {
     }
 
     private func decode(_ data: Data) -> String? {
-        if let text = String(data: data, encoding: .utf8) { return text }
-        let gb18030 = String.Encoding(rawValue: 0x80000632)
-        return String(data: data, encoding: gb18030)
+        ImportTextDecoder.decode(data)
     }
 
     private func runImport() {

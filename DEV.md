@@ -13,7 +13,7 @@
 - 推送：`pwsh -File .gh/push.ps1 -Message "..."`
 - 构建：`pwsh -File .gh/ci.ps1`（会自动等结果并抓失败日志）
 - 令牌：`.gh/token.txt`（仓库外，7 天过期）
-- 测试：156 个用例，CI 每次真跑
+- 测试：161 个用例，CI 每次真跑
 - 项目状态：**开发期（尚未定稿）**。现阶段不保留旧数据迁移包袱，正式使用前会清库重来；定稿时会明确提醒
 - 最近绿色构建：2026-11-26 run 45783411246（`macos-15-intel`，156 测试全绿，Siri/App Intents 系统动作/分类清理）
 
@@ -48,7 +48,7 @@
 
 **对账**：一页填实际余额；差异自动生成调整；每次对账留痕（ReconciliationRun）。
 
-**导入导出**：Cookie CSV 导入（自动归类）；支付宝/微信账单比对（漏记/多记）；AI 分析包（ZIP）；完整备份 JSON v2（一键恢复，恢复前自动留副本）。
+**导入导出**：Cookie CSV 导入（自动归类）；支付宝/微信账单比对（漏记/多记）；AI 分析包（ZIP）；完整备份 JSON v2（一键恢复，恢复前自动留副本）。导入兼容：兼容旧版 v1 备份、缺失字段自动补默认；CSV 编码支持 UTF-8(带 BOM)/UTF-16/GB18030/GBK，表头支持全角括号与新别名，分隔符支持逗号/分号/Tab。
 
 **其他**：周期记账自动生成；借入借出（应收/应付跟踪）；截图识别记账（本地 OCR，可接快捷指令/操作按钮）；**桌面快捷菜单**（长按 App 图标 → 记一笔 / 截图记账，零配置）；**App Intents / Siri**（内置「记一笔」「截图记账」「本月支出」三个动作，快捷指令 App 搜「轻账」即可用，Siri 可说「用轻账记一笔」「轻账本月支出」）；数据健康度；面容 ID / 触控 ID 锁（先走系统生物识别，失败才退设备密码）；隐私遮罩；极简应用图标（固定单图标）；一键初始化（倒计时 + 二次确认）。
 
@@ -118,13 +118,13 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 - ⚠️ `macos-15-arm64` / `macos-26-arm64` 是镜像目录名，**不是合法标签**，写了 job 会永远排队
 - 2026-11 起 macOS 托管 runner 容量长期紧张（尤其 arm64）：job 排队后 `cancelled` 且 0 步执行 = 平台容量问题，不是编译失败；跑 `.gh/ci-race.ps1` 自动轮换标签重试并抓包
 
-## 6. 测试覆盖（156）
+## 6. 测试覆盖（161）
 
-Money、Balance、AccountUsage、BackupRestore、PeriodPreference、MonthlyReport、Investment、StatsEngine、
-NetWorthHistory、CashFlowForecast、CreditCardBill、StatementSettlement、LoanCalculator、CreditCardCycle、
-Statement、Debt、Refund、ScreenshotImport、PaymentMethodDetector、CategorySeed、QuickTemplate、TxnSearch、
-CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngine、
-ZipWriter、Smoke。
+Money、Balance、AccountUsage、BackupRestore、ImportCompatibility、PeriodPreference、MonthlyReport、
+Investment、StatsEngine、NetWorthHistory、CashFlowForecast、CreditCardBill、StatementSettlement、
+LoanCalculator、CreditCardCycle、Statement、Debt、Refund、ScreenshotImport、PaymentMethodDetector、
+CategorySeed、QuickTemplate、TxnSearch、CookieCSVImporter、BillCSV、CategoryMatcher、PeriodRange、
+RecurringEngine、ScreenshotParser、InsightEngine、ZipWriter、Smoke。
 
 ## 7. 已知限制
 
@@ -165,6 +165,8 @@ ZipWriter、Smoke。
 | 分类没更新 / 数据乱了 | 开发期直接「我的 → 初始化数据」清库重来（seed 版本当前 7，不做历史迁移）；正式使用后不要再依赖迁移逻辑 |
 | 长按图标没有快捷菜单 | 查 Info.plist `UIApplicationShortcutItems` 与 `AppDelegate.performActionFor` |
 | 截图不识别付款方式 | 取决于截图里是否含银行名 + 卡类型 + 4 位尾号；识别到但账户不存在时会提示添加 |
+| 导入旧备份失败 | 兼容 v1（AI 分析包里的 backup.json）与 v2；缺字段自动补默认，已向后不兼容的格式会提示版本不兼容 |
+| CSV 导入乱码/没数据 | 编码 UTF-8/UTF-16/GB18030/GBK 自动识别；表头需含「交易时间」「金额」类列；分隔符支持逗号/分号/Tab |
 | 余额对不上 | 对账页 / 数据健康 |
 | 卡顿 | 避免 body 里遍历全表（已改两处：首页余额、分类计数） |
 
@@ -192,8 +194,9 @@ ZipWriter、Smoke。
 
 目标：功能闭环后进入冻结，再让用户导入真实数据。
 
-- **batch 41**：分享扩展（任意 App 分享截图直接进轻账）＋ 多账本 MVP（账本切换 + 全量按账本过滤）。
-- **batch 42**：投资进阶（逐笔持仓/收益曲线）＋ 收尾打磨（空状态、引导、文案、初始化数据自检）。
-- **batch 43（定稿候选）**：全量回归测试 + 真机路径自查清单 + 版本定稿。届时会明确提醒：「可以导入数据开始正式使用」。
+- **batch 41（已完成）**：导入兼容专项（旧版备份 v1、缺失字段、CSV 编码/表头/分隔符）。
+- **batch 42**：多账本 MVP（账本切换 + 按账本过滤）＋ 投资进阶（逐笔持仓/收益曲线）。
+- **batch 43**：分享扩展（任意 App 分享截图直接进轻账）＋ 收尾打磨（空状态、引导、文案、初始化数据自检）。
+- **batch 44（定稿候选）**：全量回归测试 + 真机路径自查清单 + 版本定稿。届时会明确提醒：「可以导入数据开始正式使用」。
 
 定稿前不保证旧数据兼容：开发期数据可随手清库。

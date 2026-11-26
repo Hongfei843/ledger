@@ -42,7 +42,7 @@ enum BillCSVParser {
 
     // 语义 → 可能的列名
     private static let aliases: [String: [String]] = [
-        "time": ["交易时间", "交易创建时间", "发生时间", "时间", "记账时间"],
+        "time": ["交易时间", "交易创建时间", "发生时间", "时间", "记账时间", "交易日期"],
         "direction": ["收/支", "收支类型", "收付款", "收支"],
         "amount": ["金额", "金额(元)", "交易金额", "发生金额"],
         "counterparty": ["交易对方", "对方账号", "商户名称", "对方"],
@@ -64,16 +64,21 @@ enum BillCSVParser {
         let lines = raw.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
 
         guard let headerIndex = lines.firstIndex(where: { line in
-            line.contains("交易时间") || line.contains("交易创建时间") || line.contains("发生时间")
+            let normalized = normalizeHeader(line)
+            return normalized.contains("交易时间") || normalized.contains("交易创建时间")
+                || normalized.contains("发生时间") || normalized.contains("记账时间")
         }) else {
             throw Failure(message: "找不到表头（需要包含「交易时间」等列）")
         }
 
-        let headers = splitFields(lines[headerIndex]).map { $0.trimmingCharacters(in: .whitespaces) }
+        let delimiter = detectDelimiter(in: lines[headerIndex])
+        let headers = splitFields(lines[headerIndex], delimiter: delimiter)
+            .map { normalizeHeader($0) }
         var columnIndex: [String: Int] = [:]
         for (key, names) in aliases {
             for name in names {
-                if let index = headers.firstIndex(where: { $0 == name || $0.contains(name) }) {
+                let normalizedName = normalizeHeader(name)
+                if let index = headers.firstIndex(where: { $0 == normalizedName || $0.contains(normalizedName) }) {
                     columnIndex[key] = index
                     break
                 }
@@ -95,7 +100,7 @@ enum BillCSVParser {
         var skipped = 0
 
         for line in lines[(headerIndex + 1)...] {
-            let fields = splitFields(line)
+            let fields = splitFields(line, delimiter: delimiter)
 
             func value(_ key: String) -> String? {
                 guard let index = columnIndex[key], index < fields.count else { return nil }
@@ -155,8 +160,25 @@ enum BillCSVParser {
         return nil
     }
 
+    /// 表头规范化：全角括号转半角、去掉空格，兼容不同版本导出。
+    static func normalizeHeader(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "（", with: "(")
+            .replacingOccurrences(of: "）", with: ")")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "\t", with: "")
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// 自动识别逗号 / 分号 / Tab 分隔（银行导出常见）。
+    static func detectDelimiter(in headerLine: String) -> Character {
+        if headerLine.contains("\t") { return "\t" }
+        if headerLine.contains(";"), !headerLine.contains(",") { return ";" }
+        return ","
+    }
+
     /// 支持引号内逗号与双引号转义
-    static func splitFields(_ line: String) -> [String] {
+    static func splitFields(_ line: String, delimiter: Character = ",") -> [String] {
         var fields: [String] = []
         var current = ""
         var inQuotes = false
@@ -173,7 +195,7 @@ enum BillCSVParser {
                 }
                 inQuotes.toggle()
                 index += 1
-            } else if character == ",", !inQuotes {
+            } else if character == delimiter, !inQuotes {
                 fields.append(current)
                 current = ""
                 index += 1
