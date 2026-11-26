@@ -5,11 +5,12 @@ import UIKit
 
 /// 外部（截图识别 / 快捷指令 / 相册）带进来的预填值
 struct EntrySheetPrefill {
-    var amountMinor: Int64?
-    var payee: String?
-    var note: String?
-    var occurredAt: Date?
-    var hint: String?
+    var amountMinor: Int64? = nil
+    var payee: String? = nil
+    var note: String? = nil
+    var occurredAt: Date? = nil
+    var accountId: UUID? = nil
+    var hint: String? = nil
 }
 
 extension EntrySheetPrefill {
@@ -22,7 +23,7 @@ extension EntrySheetPrefill {
         } else {
             hint = "已从截图识别，请核对"
         }
-        self.init(amountMinor: draft.amountMinor, payee: draft.payee, note: nil, occurredAt: nil, hint: hint)
+        self.init(amountMinor: draft.amountMinor, payee: draft.payee, note: nil, occurredAt: nil, accountId: nil, hint: hint)
     }
 }
 
@@ -75,7 +76,7 @@ struct EntrySheet: View {
         _amountText = State(initialValue: initialAmount)
         _selectedType = State(initialValue: editingTxn?.type ?? .expense)
         _selectedCategoryId = State(initialValue: editingTxn?.categoryId)
-        _selectedAccountId = State(initialValue: editingTxn?.accountId)
+        _selectedAccountId = State(initialValue: editingTxn?.accountId ?? prefill?.accountId)
         _counterAccountId = State(initialValue: editingTxn?.counterAccountId)
         _note = State(initialValue: editingTxn?.note ?? prefill?.note ?? "")
         _payee = State(initialValue: editingTxn?.payee ?? prefill?.payee ?? "")
@@ -593,6 +594,9 @@ struct EntrySheet: View {
             } else {
                 selectedAccountId = filteredAccounts.first?.id
             }
+        }
+        if let current = selectedAccountId, !filteredAccounts.contains(where: { $0.id == current }) {
+            selectedAccountId = filteredAccounts.first?.id
         }
         if selectedCategoryId == nil && selectedType != .transfer {
             // 优先复用上次记账用过的分类

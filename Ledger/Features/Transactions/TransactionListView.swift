@@ -33,6 +33,7 @@ struct TransactionListView: View {
     @State private var deletedBuffer: [Txn] = []
     @State private var screenshotItem: PhotosPickerItem?
     @State private var isScreenshotBusy = false
+    @State private var quickEntryAccount: Account?
 
     private struct ToastState: Equatable {
         let message: String
@@ -185,8 +186,11 @@ struct TransactionListView: View {
         let balances = accountBalances
         return NavigationStack {
             ZStack(alignment: .bottomTrailing) {
-                List {
-                    if !dueReminders.isEmpty {
+                VStack(spacing: 0) {
+                    homeHeader(balances)
+
+                    List {
+                        if !dueReminders.isEmpty {
                         Section {
                             ForEach(dueReminders) { item in
                                 NavigationLink {
@@ -216,27 +220,6 @@ struct TransactionListView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                        }
-                    }
-
-                    Section {
-                        periodBar
-                            .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-
-                        monthSummaryCard(balances)
-                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                    }
-
-                    Section {
-                        if !cardAccounts.isEmpty {
-                            accountStrip(balances)
-                                .listRowInsets(EdgeInsets())
-                                .listRowBackground(Color.clear)
-                                .listRowSeparator(.hidden)
                         }
                     }
 
@@ -284,9 +267,11 @@ struct TransactionListView: View {
                             }
                         }
                     }
+                    }
+                    .listStyle(.insetGrouped)
+                    .listSectionSpacing(10)
+                    .contentMargins(.top, 6, for: .scrollContent)
                 }
-                .listStyle(.insetGrouped)
-                .listSectionSpacing(10)
 
                 Button {
                     showEntry = true
@@ -382,6 +367,13 @@ struct TransactionListView: View {
                 }
                 .presentationDetents([.large])
             }
+            .sheet(item: $quickEntryAccount) { account in
+                EntrySheet(prefill: EntrySheetPrefill(
+                    accountId: account.id,
+                    hint: "已选择账户：\(account.name)"
+                ))
+                .presentationDetents([.large])
+            }
             .sheet(isPresented: $showCustomRange) {
                 customRangeSheet
                     .presentationDetents([.height(300)])
@@ -471,6 +463,23 @@ struct TransactionListView: View {
     }
 
     // MARK: - 汇总
+
+    private func homeHeader(_ balances: [UUID: Int64]) -> some View {
+        VStack(spacing: Theme.Spacing.m) {
+            periodBar
+                .padding(.horizontal, Theme.Spacing.s)
+
+            monthSummaryCard(balances)
+                .padding(.horizontal, Theme.Spacing.l)
+
+            if !cardAccounts.isEmpty {
+                accountStrip(balances)
+            }
+        }
+        .padding(.top, Theme.Spacing.xs)
+        .padding(.bottom, Theme.Spacing.s)
+        .background(Theme.pageBackground)
+    }
 
     private func monthSummaryCard(_ balances: [UUID: Int64]) -> some View {
         let netWorth = balances.values.reduce(Int64(0), +)
@@ -638,9 +647,16 @@ struct TransactionListView: View {
                     .minimumScaleFactor(0.8)
             }
         }
-        .frame(width: 132, alignment: .leading)
-        .padding(Theme.Spacing.m)
+        .frame(width: 110, alignment: .leading)
+        .padding(Theme.Spacing.s + 2)
         .cardStyle(radius: 14)
+        .contextMenu {
+            Button {
+                quickEntryAccount = account
+            } label: {
+                Label("记一笔到\(account.name)", systemImage: "square.and.pencil")
+            }
+        }
     }
 
     private func creditCaption(_ account: Account) -> String? {
