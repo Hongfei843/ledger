@@ -11,9 +11,7 @@ struct StatsView: View {
     @State private var monthAnchor = Date()
     @State private var caliber: StatsCaliber = .personal
 
-    private var bookMatches: (UUID) -> Bool {
-        { BookScope.matches($0, raw: currentBookRaw) }
-    }
+    private func bookMatches(_ id: UUID) -> Bool { BookScope.matches(id, raw: currentBookRaw) }
     private var liveTxns: [Txn] { allTxns.filter { $0.deletedAt == nil && bookMatches($0.bookId) } }
     private var liveClaims: [Claim] { claims.filter { bookMatches($0.bookId) } }
     private var scopedCategories: [Category] { categories.filter { bookMatches($0.bookId) } }
@@ -230,7 +228,7 @@ struct StatsView: View {
                         let ratio = totalExpense > 0 ? Double(slice.amountMinor) / Double(totalExpense) : 0
                         if ratio >= 0.08 {
                             Text(String(format: "%.0f%%", ratio * 100))
-                                .font(.system(size: 9, weight: .semibold))
+                                .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.white)
                         }
                     }

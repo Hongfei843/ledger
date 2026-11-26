@@ -186,7 +186,7 @@ struct AccountEditView: View {
             if let preset { account.colorHex = preset.colorHex }
             account.updatedAt = Date()
         } else {
-            let bookId = books.first?.id ?? UUID()
+            let bookId = BookScope.currentId ?? books.first?.id ?? UUID()
             let created = Account(
                 bookId: bookId,
                 name: trimmedName,

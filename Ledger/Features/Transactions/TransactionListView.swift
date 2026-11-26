@@ -51,7 +51,6 @@ struct TransactionListView: View {
         let loanId: UUID?
     }
 
-    private var currentBookId: UUID? { UUID(uuidString: currentBookRaw) }
     private func bookMatches(_ id: UUID) -> Bool { BookScope.matches(id, raw: currentBookRaw) }
 
     private var activeTxns: [Txn] { allTxns.filter { bookMatches($0.bookId) } }

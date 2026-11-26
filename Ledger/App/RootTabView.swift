@@ -119,11 +119,12 @@ struct RootTabView: View {
         }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
-            if BookScope.currentId == nil {
-                let books = (try? context.fetch(FetchDescriptor<Book>())) ?? []
-                if let book = books.first(where: { $0.isDefault }) ?? books.first {
-                    BookScope.setCurrent(book.id)
-                }
+            let books = (try? context.fetch(FetchDescriptor<Book>())) ?? []
+            let liveBooks = books.filter { $0.deletedAt == nil }
+            if let current = BookScope.currentId, liveBooks.contains(where: { $0.id == current }) {
+                // 当前账本有效
+            } else if let book = liveBooks.first(where: { $0.isDefault }) ?? liveBooks.first {
+                BookScope.setCurrent(book.id)
             }
             if let pending = UserDefaults.standard.string(forKey: AppDelegate.pendingQuickActionKey) {
                 handleQuickAction(pending)
@@ -219,23 +220,6 @@ struct RootTabView: View {
         if let draft = ScreenshotImportStore.take() {
             importDraft = draft
         }
-    }
-}
-
-struct PlaceholderTab: View {
-    let title: String
-    let note: String
-
-    var body: some View {
-        VStack(spacing: Theme.Spacing.s) {
-            Text(title)
-                .font(.title2.weight(.semibold))
-            Text(note)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.pageBackground)
     }
 }
 

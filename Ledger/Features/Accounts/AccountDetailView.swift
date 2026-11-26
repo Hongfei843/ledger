@@ -158,7 +158,7 @@ struct AccountDetailView: View {
 
     private var investmentSection: some View {
         let position = InvestmentService.position(for: account, txns: allTxns)
-        let cost = account.positionCostMinor ?? 0
+        let cost = position?.costMinor ?? 0
         return Section("投资持仓") {
             LabeledContent("市值", value: Money.format(balance))
             if cost > 0, let position {

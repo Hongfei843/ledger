@@ -262,7 +262,8 @@ struct ImportView: View {
     }
 
     private func runImport() {
-        guard let accountId = defaultAccountId, let bookId = books.first?.id else { return }
+        guard let accountId = defaultAccountId,
+              let bookId = BookScope.currentId ?? books.first?.id else { return }
         isWorking = true
         let result = ImportService.importCookie(
             records: records,

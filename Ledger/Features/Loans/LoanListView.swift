@@ -263,7 +263,7 @@ struct NewLoanSheet: View {
               let rate = Double(rateText),
               let term = Int(termText),
               let accountId = paymentAccountId,
-              let bookId = books.first?.id else { return }
+              let bookId = BookScope.currentId ?? books.first?.id else { return }
 
         let loan = Loan(
             bookId: bookId,

@@ -219,7 +219,7 @@ struct QuickTemplateEditView: View {
         } else {
             let nextOrder = (try? context.fetch(FetchDescriptor<QuickTemplate>()).map { $0.sortOrder }.max()) ?? nil
             let created = QuickTemplate(
-                bookId: books.first?.id ?? UUID(),
+                bookId: BookScope.currentId ?? books.first?.id ?? UUID(),
                 name: trimmedName,
                 type: type,
                 amountMinor: validAmount,

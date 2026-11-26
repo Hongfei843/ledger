@@ -230,7 +230,7 @@ struct DebtEditView: View {
             debt.note = note.isEmpty ? nil : note
             debt.updatedAt = Date()
         } else {
-            let bookId = books.first?.id ?? UUID()
+            let bookId = BookScope.currentId ?? books.first?.id ?? UUID()
             let created = Debt(
                 bookId: bookId,
                 direction: direction,

@@ -784,25 +784,6 @@ struct EntrySheet: View {
             try? context.save()
         }
 
-        // 投资账户：转账自动同步持仓成本
-        if editingTxn == nil, selectedType == .transfer {
-            if let targetId = counterAccountId,
-               let target = accounts.first(where: { $0.id == targetId }),
-               target.type == .investment {
-                target.positionCostMinor = InvestmentService.costAfterContribution(
-                    current: target.positionCostMinor,
-                    amount: amountMinor
-                )
-            }
-            if let source = accounts.first(where: { $0.id == accountId }), source.type == .investment {
-                source.positionCostMinor = InvestmentService.costAfterWithdrawal(
-                    current: source.positionCostMinor,
-                    amount: amountMinor
-                )
-            }
-            try? context.save()
-        }
-
         Haptics.success()
 
         if let categoryId = selectedCategoryId {

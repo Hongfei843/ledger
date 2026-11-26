@@ -14,9 +14,7 @@ struct MonthlyReportView: View {
         _monthAnchor = State(initialValue: month)
     }
 
-    private var bookMatches: (UUID) -> Bool {
-        { BookScope.matches($0, raw: currentBookRaw) }
-    }
+    private func bookMatches(_ id: UUID) -> Bool { BookScope.matches(id, raw: currentBookRaw) }
 
     private var liveTxns: [Txn] { allTxns.filter { $0.deletedAt == nil && bookMatches($0.bookId) } }
 
@@ -122,11 +120,11 @@ struct MonthlyReportView: View {
                 .minimumScaleFactor(0.7)
             if let change {
                 Text(change >= 0 ? "较上月 +\(change)%" : "较上月 \(change)%")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(change >= 0 ? Theme.income : Theme.danger)
             } else {
                 Text("上月无数据")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
         }

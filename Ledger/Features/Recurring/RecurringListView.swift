@@ -220,7 +220,7 @@ struct RecurringEditView: View {
             rule.note = note.isEmpty ? nil : note
             rule.updatedAt = Date()
         } else {
-            let bookId = books.first?.id ?? UUID()
+            let bookId = BookScope.currentId ?? books.first?.id ?? UUID()
             let created = RecurringRule(
                 bookId: bookId,
                 title: trimmed,

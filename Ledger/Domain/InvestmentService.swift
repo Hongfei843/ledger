@@ -44,7 +44,9 @@ enum InvestmentService {
             transactions: txns.filter { $0.deletedAt == nil },
             openingBalanceMinor: account.openingBalanceMinor
         )
-        let cost = account.positionCostMinor ?? 0
+        let manualCost = account.positionCostMinor ?? 0
+        let transferred = netTransferIntoInvestment(accountId: account.id, txns: txns)
+        let cost = max(0, manualCost + transferred)
         return InvestmentPosition(accountId: account.id, valueMinor: value, costMinor: cost)
     }
 
@@ -56,6 +58,16 @@ enum InvestmentService {
         let value = positions.reduce(Int64(0)) { $0 + $1.valueMinor }
         let cost = positions.reduce(Int64(0)) { $0 + $1.costMinor }
         return InvestmentPortfolio(valueMinor: value, costMinor: cost, positions: positions)
+    }
+
+    /// 投资账户的净投入：转入为正、转出为负（来自转账流水，编辑/删除会自动重算）
+    static func netTransferIntoInvestment(accountId: UUID, txns: [Txn]) -> Int64 {
+        var net: Int64 = 0
+        for txn in txns where txn.deletedAt == nil && txn.type == .transfer {
+            if txn.counterAccountId == accountId { net += txn.amountMinor }
+            if txn.accountId == accountId { net -= txn.amountMinor }
+        }
+        return net
     }
 
     /// 转入投资账户：持仓成本增加

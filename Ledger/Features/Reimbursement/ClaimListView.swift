@@ -134,7 +134,7 @@ struct ClaimListView: View {
     }
 
     private func createClaim() {
-        let bookId = books.first?.id ?? UUID()
+        let bookId = BookScope.currentId ?? books.first?.id ?? UUID()
         let monthKey = AppCalendar.monthKey(Date())
         let claim = Claim(bookId: bookId, title: "\(monthKey) 报销", periodMonth: monthKey)
         context.insert(claim)

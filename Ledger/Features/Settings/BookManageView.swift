@@ -69,6 +69,14 @@ struct BookManageView: View {
         }
         .navigationTitle("账本管理")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            guard let current = currentId, liveBooks.contains(where: { $0.id == current }) else {
+                if let first = liveBooks.first {
+                    BookScope.setCurrent(first.id)
+                }
+                return
+            }
+        }
         .sheet(isPresented: $showNew) {
             NavigationStack {
                 Form {

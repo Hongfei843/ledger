@@ -204,7 +204,7 @@ struct BillCompareView: View {
     // MARK: - 补录
 
     private func fillMissing(_ items: [BillRow]) {
-        guard let accountId, let bookId = books.first?.id else { return }
+        guard let accountId, let bookId = BookScope.currentId ?? books.first?.id else { return }
         let inserted = ImportService.importBillRows(
             items,
             accountId: accountId,

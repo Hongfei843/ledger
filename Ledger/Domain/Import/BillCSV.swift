@@ -89,12 +89,10 @@ enum BillCSVParser {
             throw Failure(message: "表头缺少「交易时间」或「金额」列")
         }
 
-        let headerText = headers.joined()
         // 来源标识常出现在文件抬头的说明行里，不能只看表头
         let probe = raw
         let source: BillSource = probe.contains("支付宝") ? .alipay
             : (probe.contains("微信") ? .wechat : .generic)
-        _ = headerText
 
         var rows: [BillRow] = []
         var skipped = 0

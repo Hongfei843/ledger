@@ -108,7 +108,7 @@ struct AssetsHomeView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(Money.format(netWorthMinor))
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(Theme.Fonts.amountL)
                 .monospacedDigit()
                 .foregroundStyle(netWorthMinor < 0 ? Theme.danger : .primary)
                 .lineLimit(1)
@@ -141,7 +141,7 @@ struct AssetsHomeView: View {
 
     private func miniStat(title: String, value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.system(size: 10)).foregroundStyle(.secondary)
+            Text(title).font(.caption2).foregroundStyle(.secondary)
             Text(value)
                 .font(.caption.weight(.semibold))
                 .monospacedDigit()
@@ -249,7 +249,7 @@ struct AssetsHomeView: View {
                 .monospacedDigit()
                 .foregroundStyle((balances[account.id] ?? 0) < 0 ? Theme.danger : .primary)
             Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 2)
@@ -268,9 +268,10 @@ struct AssetsHomeView: View {
             }
             return "还款日 \(due)"
         }
-        if account.type == .investment, let cost = account.positionCostMinor, cost > 0 {
-            let profit = balance - cost
-            return "成本 \(Money.format(cost)) · 盈亏 \(Money.format(profit, showSign: true))"
+        if account.type == .investment,
+           let position = InvestmentService.position(for: account, txns: liveTxns),
+           position.costMinor > 0 {
+            return "成本 \(Money.format(position.costMinor)) · 盈亏 \(Money.format(position.profitMinor ?? 0, showSign: true))"
         }
         return account.type.displayName
     }
@@ -340,7 +341,7 @@ struct AssetsHomeView: View {
                 .monospacedDigit()
                 .foregroundStyle(amount > 0 ? Theme.danger : .secondary)
             Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
