@@ -155,7 +155,8 @@ final class BackupRestoreTests: XCTestCase {
         XCTAssertEqual(accounts.count, 2)
         let cash = try XCTUnwrap(accounts.first { $0.id == seeded.cashId })
         XCTAssertEqual(cash.openingBalanceMinor, 100_000)
-        XCTAssertEqual(cash.cachedBalanceMinor, 100_000 - 1_250 - 500)
+        // 已删除流水不参与余额计算
+        XCTAssertEqual(cash.cachedBalanceMinor, 100_000 - 1_250)
         let credit = try XCTUnwrap(accounts.first { $0.id == seeded.creditId })
         XCTAssertEqual(credit.creditLimitMinor, 500_000)
 
