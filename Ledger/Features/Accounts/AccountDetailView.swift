@@ -184,8 +184,8 @@ struct AccountDetailView: View {
                 LabeledContent("最后还款日", value: DateFormatter.ledgerShort.string(from: info.dueDate))
                 let days = AppCalendar.gregorian.dateComponents(
                     [.day],
-                    from: AppCalendar.startOfDay(for: Date()),
-                    to: AppCalendar.startOfDay(for: info.dueDate)
+                    from: AppCalendar.startOfDay(Date()),
+                    to: AppCalendar.startOfDay(info.dueDate)
                 ).day ?? 0
                 LabeledContent("剩余天数", value: days >= 0 ? "\(days) 天" : "已逾期 \(-days) 天")
                     .foregroundStyle(days < 0 ? Theme.danger : .primary)
