@@ -250,7 +250,7 @@ struct TransactionListView: View {
                                         Text("支出 \(Money.format(group.expenseMinor))")
                                     }
                                 }
-                                .font(.caption)
+                                .font(.caption.weight(.medium))
                                 .foregroundStyle(.secondary)
                             }
                         }
@@ -261,6 +261,8 @@ struct TransactionListView: View {
                     .background(Theme.pageBackground)
                     .listSectionSpacing(14)
                     .contentMargins(.top, 0, for: .scrollContent)
+                    // 最后一笔流水不应被悬浮按钮盖住。
+                    .contentMargins(.bottom, Theme.Layout.fabClearance, for: .scrollContent)
                 }
 
                 Button {
@@ -276,11 +278,13 @@ struct TransactionListView: View {
                     .padding(.horizontal, 22)
                     .frame(height: 56)
                     .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
-                    .shadow(color: Theme.accent.opacity(0.30), radius: 16, y: 7)
+                    .shadow(color: Theme.accent.opacity(0.18), radius: 12, y: 5)
                 }
                 .buttonStyle(SoftPressButtonStyle())
                 .padding(.trailing, Theme.Spacing.xl)
-                .padding(.bottom, Theme.Spacing.xxl)
+                // RootTabView 的 safeAreaInset 已为自定义 Tab 栏预留空间；这里只保留呼吸间距，
+                // 避免按钮阴影透过半透明 Tab 栏形成“被压住”的错觉。
+                .padding(.bottom, Theme.Spacing.l)
             }
             .overlay(alignment: .top) {
                 if let toast {
@@ -314,22 +318,33 @@ struct TransactionListView: View {
                     periodMenu
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    PhotosPicker(selection: $screenshotItem, matching: .images, photoLibrary: .shared()) {
-                        if isScreenshotBusy {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "text.viewfinder")
+                    // 右侧操作组与左侧周期控件共用胶囊容器，避免系统把两个按钮散开渲染。
+                    HStack(spacing: 0) {
+                        PhotosPicker(selection: $screenshotItem, matching: .images, photoLibrary: .shared()) {
+                            if isScreenshotBusy {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "text.viewfinder")
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
                         }
+                        .frame(width: 34, height: Theme.Layout.toolbarControlHeight)
+                        .contentShape(Rectangle())
+                        .disabled(isScreenshotBusy)
+                        .accessibilityLabel("截图识别记账")
+
+                        NavigationLink {
+                            SearchView()
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 15, weight: .semibold))
+                                .frame(width: 34, height: Theme.Layout.toolbarControlHeight)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel("搜索")
                     }
-                    .disabled(isScreenshotBusy)
-                    .accessibilityLabel("截图识别记账")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        SearchView()
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                    }
+                    .foregroundStyle(.secondary)
+                    .toolbarCapsuleStyle()
                 }
             }
             .onChange(of: screenshotItem) { _, item in
@@ -384,25 +399,45 @@ struct TransactionListView: View {
     // MARK: - 周期切换
 
     private var periodMenu: some View {
-        HStack(spacing: 2) {
-            Button { period = period.shifted(by: -1) } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(width: 30, height: 34)
+        HStack(spacing: 0) {
+            periodChevron(
+                systemName: "chevron.left",
+                label: "上一期",
+                isEnabled: period.kind != .custom
+            ) {
+                period = period.shifted(by: -1)
             }
-            .disabled(period.kind == .custom)
-            .accessibilityLabel("上一期")
 
             periodPicker
 
-            Button { period = period.shifted(by: 1) } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 18, weight: .semibold))
-                    .frame(width: 30, height: 34)
+            periodChevron(
+                systemName: "chevron.right",
+                label: "下一期",
+                isEnabled: period.kind != .custom
+            ) {
+                period = period.shifted(by: 1)
             }
-            .disabled(period.kind == .custom)
-            .accessibilityLabel("下一期")
         }
+        .toolbarCapsuleStyle()
+    }
+
+    /// 三个箭头统一字重与色阶，只按语义保留尺寸差异；禁用态也使用同一褪色比例。
+    private func periodChevron(
+        systemName: String,
+        label: String,
+        isEnabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(isEnabled ? Color.secondary : Color.secondary.opacity(0.38))
+                .frame(width: 28, height: Theme.Layout.toolbarControlHeight)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .accessibilityLabel(label)
     }
 
     private var periodPicker: some View {
@@ -442,16 +477,19 @@ struct TransactionListView: View {
                 }
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 Text(period.compactTitle)
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.72)
+                    .minimumScaleFactor(0.78)
+                    .foregroundStyle(.primary)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.secondary)
+                    .frame(width: 12, alignment: .center)
             }
-            .foregroundStyle(.primary)
+            .frame(height: Theme.Layout.toolbarControlHeight)
+            .contentShape(Rectangle())
         }
         .accessibilityLabel("当前周期 \(period.title())")
     }
@@ -492,7 +530,18 @@ struct TransactionListView: View {
         }
         .padding(.top, Theme.Spacing.xs)
         .padding(.bottom, Theme.Spacing.s)
-        .background(Theme.pageBackground)
+        // 顶部用极淡的品牌色渐隐到页面底色，避免主卡阴影在下方形成一道灰色断层。
+        .background(
+            LinearGradient(
+                colors: [
+                    Theme.accent.opacity(0.045),
+                    Theme.pageBackground,
+                    Theme.pageBackground
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
     }
 
     private func monthSummaryCard() -> some View {
@@ -556,7 +605,7 @@ struct TransactionListView: View {
                 .offset(x: 54, y: -64)
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: Theme.accent.opacity(0.22), radius: 24, x: 0, y: 12)
+        .shadow(color: Theme.accent.opacity(0.10), radius: 14, x: 0, y: 6)
     }
 
     private func heroMetric(title: String, value: String) -> some View {
@@ -812,10 +861,10 @@ struct TxnRow: View {
         HStack(spacing: Theme.Spacing.m) {
             CategoryIconView(category: category, size: 44)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
                     Text(primaryTitle)
-                        .font(.subheadline.weight(.medium))
+                        .font(.system(size: 14, weight: .medium))
                         .lineLimit(1)
                     if txn.isRefund {
                         Text("退款")
@@ -827,8 +876,9 @@ struct TxnRow: View {
                     }
                 }
                 Text(subtitle)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineSpacing(1)
                     .lineLimit(1)
             }
 

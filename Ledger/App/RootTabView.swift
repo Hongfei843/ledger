@@ -47,7 +47,7 @@ struct LedgerFloatingTabBar: View {
                     }
                     .foregroundStyle(selection == tab ? Theme.accent : Color.secondary)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 52)
+                    .frame(height: Theme.Layout.tabBarHeight - 16)
                     .background(
                         selection == tab ? Theme.accent.opacity(0.11) : Color.clear,
                         in: RoundedRectangle(cornerRadius: 17, style: .continuous)
@@ -105,6 +105,7 @@ struct RootTabView: View {
             tabLayer(.settings) { SettingsView() }
         }
         .tint(Theme.accent)
+        // 自定义 Tab 栏占据底部安全区；子页面悬浮按钮据此避让，不再依赖系统 TabView。
         .safeAreaInset(edge: .bottom, spacing: 0) {
             LedgerFloatingTabBar(selection: $selectedTab)
         }

@@ -59,6 +59,16 @@ enum Theme {
         static let icon: CGFloat = 14
     }
 
+    /// 底部自定义 Tab 栏、顶部工具栏与悬浮按钮共用布局常量，避免各处零散取值。
+    enum Layout {
+        /// 52pt 按钮 + 上下 6pt 内边距 + 底部 4pt 留白。
+        static let tabBarHeight: CGFloat = 68
+        /// 顶部工具栏胶囊高度，左侧周期控件与右侧操作组保持一致。
+        static let toolbarControlHeight: CGFloat = 36
+        /// 列表底部为悬浮按钮预留的空间：Tab 栏 + 按钮高度 + 呼吸空间。
+        static let fabClearance: CGFloat = 92
+    }
+
     /// 字号规范：金额三档（26 / 17 / 13），统一圆体；等宽数字在调用处加 .monospacedDigit()
     enum Fonts {
         /// 超大金额：净资产、总资产
@@ -187,6 +197,11 @@ extension View {
     func cardStyle(radius: CGFloat = Theme.Radius.card, padding: CGFloat? = nil) -> some View {
         modifier(CardStyleModifier(radius: radius, padding: padding))
     }
+
+    /// 顶部工具栏胶囊：周期控件与右侧操作组共用同一容器，消除边框/高度/留白不一致。
+    func toolbarCapsuleStyle() -> some View {
+        modifier(ToolbarCapsuleStyle())
+    }
 }
 
 private struct CardStyleModifier: ViewModifier {
@@ -205,6 +220,19 @@ private struct CardStyleModifier: ViewModifier {
                     .strokeBorder(Color.primary.opacity(0.045), lineWidth: 0.5)
             )
             .shadow(color: .black.opacity(0.045), radius: 18, x: 0, y: 8)
+    }
+}
+
+private struct ToolbarCapsuleStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(height: Theme.Layout.toolbarControlHeight)
+            .background(Theme.cardBackground.opacity(0.92), in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
     }
 }
 
@@ -247,19 +275,21 @@ struct PremiumEmptyState: View {
     let message: String
 
     var body: some View {
-        VStack(spacing: Theme.Spacing.m) {
-            LedgerIconBadge(systemImage: systemImage, tint: .secondary, size: 58)
-            VStack(spacing: 6) {
+        VStack(spacing: Theme.Spacing.l) {
+            LedgerIconBadge(systemImage: systemImage, tint: .secondary, size: 56)
+            VStack(spacing: Theme.Spacing.s) {
                 Text(title)
-                    .font(.headline)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
                 Text(message)
-                    .font(.footnote)
+                    .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(.secondary)
+                    .lineSpacing(4)
                     .multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, Theme.Spacing.xxl)
+        .padding(.vertical, Theme.Spacing.xxl + Theme.Spacing.m)
         .padding(.horizontal, Theme.Spacing.xl)
     }
 }
