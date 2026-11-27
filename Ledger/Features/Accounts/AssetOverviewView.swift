@@ -6,13 +6,16 @@ import Charts
 struct AssetOverviewView: View {
     @Query private var accounts: [Account]
     @Query private var allTxns: [Txn]
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
+
+    private func bookMatches(_ id: UUID) -> Bool { BookScope.matches(id, raw: currentBookRaw) }
 
     private var liveAccounts: [Account] {
-        accounts.filter { $0.deletedAt == nil && !$0.isArchived }
+        accounts.filter { $0.deletedAt == nil && !$0.isArchived && bookMatches($0.bookId) }
     }
 
     private var liveTxns: [Txn] {
-        allTxns.filter { $0.deletedAt == nil }
+        allTxns.filter { $0.deletedAt == nil && bookMatches($0.bookId) }
     }
 
     private func balance(_ account: Account) -> Int64 {
@@ -24,24 +27,22 @@ struct AssetOverviewView: View {
     }
 
     private var assetAccounts: [Account] {
-        liveAccounts.filter { !$0.type.isLiability }.sorted { balance($0) > balance($1) }
+        liveAccounts.filter { !$0.type.isLiability && $0.includeInNetWorth && !$0.isSystem }.sorted { balance($0) > balance($1) }
     }
 
     private var liabilityAccounts: [Account] {
-        liveAccounts.filter { $0.type.isLiability }.sorted { balance($0) < balance($1) }
+        liveAccounts.filter { $0.type.isLiability && $0.type != .loan && $0.includeInNetWorth && !$0.isSystem }.sorted { balance($0) < balance($1) }
     }
 
-    private var totalAssets: Int64 {
-        assetAccounts.filter { $0.includeInNetWorth }.reduce(Int64(0)) { $0 + balance($1) }
+    private var totals: NetWorthTotals {
+        BalanceService.totals(accounts: liveAccounts, transactions: liveTxns, bookId: BookScope.currentId)
     }
 
-    private var totalLiabilities: Int64 {
-        liabilityAccounts.filter { $0.includeInNetWorth }.reduce(Int64(0)) { $0 + abs(balance($1)) }
-    }
+    private var totalAssets: Int64 { totals.assetsMinor }
 
-    private var netWorth: Int64 {
-        totalAssets - totalLiabilities
-    }
+    private var totalLiabilities: Int64 { totals.liabilitiesMinor }
+
+    private var netWorth: Int64 { totals.netWorthMinor }
 
     var body: some View {
         List {

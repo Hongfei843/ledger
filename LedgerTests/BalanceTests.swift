@@ -75,4 +75,40 @@ final class BalanceTests: XCTestCase {
         )
         XCTAssertEqual(balance, 10000)
     }
+
+    func testTotalsAreConsistentAndScopedToBook() {
+        let bookA = UUID()
+        let bookB = UUID()
+        let cash = Account(bookId: bookA, name: "现金", type: .cash, openingBalanceMinor: 10_000)
+        let credit = Account(bookId: bookA, name: "信用卡", type: .credit, openingBalanceMinor: -3_000)
+        let excluded = Account(bookId: bookA, name: "专用", type: .cash, openingBalanceMinor: 99_000)
+        excluded.includeInNetWorth = false
+        let otherBook = Account(bookId: bookB, name: "其他账本", type: .cash, openingBalanceMinor: 50_000)
+        let loan = Account(bookId: bookA, name: "房贷", type: .loan, openingBalanceMinor: -500_000, isSystem: true)
+
+        let totals = BalanceService.totals(
+            accounts: [cash, credit, excluded, otherBook, loan],
+            transactions: [],
+            bookId: bookA
+        )
+        XCTAssertEqual(totals.assetsMinor, 10_000)
+        XCTAssertEqual(totals.liabilitiesMinor, 3_000)
+        XCTAssertEqual(totals.netWorthMinor, 7_000)
+        XCTAssertEqual(totals.assetsMinor - totals.liabilitiesMinor, totals.netWorthMinor)
+    }
+
+    func testCreditOverpaymentCountsAsAssetInsteadOfLiability() {
+        let credit = Account(bookId: UUID(), name: "信用卡", type: .credit, openingBalanceMinor: 500)
+        let totals = BalanceService.totals(accounts: [credit], transactions: [])
+        XCTAssertEqual(totals.assetsMinor, 500)
+        XCTAssertEqual(totals.liabilitiesMinor, 0)
+        XCTAssertEqual(totals.netWorthMinor, 500)
+    }
+
+    func testLiabilityActualDebtAndSignedBalanceConversion() {
+        XCTAssertEqual(BalanceService.signedBalance(fromActualInput: 1_200, accountType: .credit), -1_200)
+        XCTAssertEqual(BalanceService.signedBalance(fromActualInput: -200, accountType: .credit), 200)
+        XCTAssertEqual(BalanceService.displayBalance(-1_200, accountType: .credit), 1_200)
+        XCTAssertEqual(BalanceService.displayBalance(1_200, accountType: .cash), 1_200)
+    }
 }

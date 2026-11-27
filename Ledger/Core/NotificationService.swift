@@ -98,7 +98,7 @@ enum NotificationService {
 
         let content = UNMutableNotificationContent()
         content.title = "该备份了"
-        content.body = "数据只在这台手机上，设置 → 导出分析包，存一份到文件 App。"
+        content.body = "数据只在这台手机上，我的 → 备份与恢复，存一份到文件 App。"
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: true)

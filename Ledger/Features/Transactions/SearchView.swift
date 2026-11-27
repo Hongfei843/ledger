@@ -31,7 +31,7 @@ struct SearchView: View {
     }
 
     private var expenseTotal: Int64 {
-        let gross = results.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let gross = results.filter { $0.type == .expense && $0.source != .reimbursement }.reduce(Int64(0)) { $0 + $1.amountMinor }
         return RefundService.netExpense(expenseMinor: gross, refundMinor: refundTotal)
     }
 

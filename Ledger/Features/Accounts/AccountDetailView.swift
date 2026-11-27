@@ -37,6 +37,10 @@ struct AccountDetailView: View {
         )
     }
 
+    private var displayBalance: Int64 {
+        BalanceService.displayBalance(balance, accountType: account.type)
+    }
+
     private var billInfo: CreditCardBillInfo? {
         CreditCardBillService.info(
             for: account,
@@ -61,7 +65,7 @@ struct AccountDetailView: View {
 
             Section {
                 HStack {
-                    TextField("输入实际余额", text: $actualBalanceText)
+                    TextField(account.type.isLiability ? "输入实际欠款" : "输入实际余额", text: $actualBalanceText)
                         .keyboardType(.numbersAndPunctuation)
                     Button("校准") { reconcile() }
                         .disabled(Money.parse(actualBalanceText) == nil)
@@ -74,7 +78,9 @@ struct AccountDetailView: View {
             } header: {
                 Text("余额校准")
             } footer: {
-                Text("输入银行 App 里看到的实际余额，系统会生成一条「余额调整」把账面拉平，且不计入收支统计。")
+                Text(account.type.isLiability
+                     ? "填写银行 App 显示的全部欠款，不是仅本期账单；溢缴款可填负数。系统会生成不计收支的余额调整。"
+                     : "输入银行 App 里看到的实际余额，系统会生成一条「余额调整」把账面拉平，且不计入收支统计。")
             }
 
             Section("最近流水") {
@@ -107,7 +113,7 @@ struct AccountDetailView: View {
         .navigationTitle(account.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItem(placement: .topBarTrailing) {
                 Button("编辑") { showEdit = true }
             }
             if account.type.isCreditLike {
@@ -143,7 +149,7 @@ struct AccountDetailView: View {
             Text(account.type.displayName)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            Text(Money.format(balance))
+            Text(Money.format(displayBalance))
                 .font(Theme.Fonts.amountXL)
                 .monospacedDigit()
                 .foregroundStyle(balance < 0 ? Theme.danger : .primary)
@@ -237,31 +243,40 @@ struct AccountDetailView: View {
     }
 
     private func reconcile() {
-        guard let actual = Money.parse(actualBalanceText) else { return }
+        guard let actualInput = Money.parse(actualBalanceText) else { return }
+        let actual = BalanceService.signedBalance(fromActualInput: actualInput, accountType: account.type)
         let delta = actual - balance
-        guard delta != 0 else {
-            reconcileMessage = "账面与实际一致，无需调整"
-            return
+        let now = Date()
+        account.lastReconciledAt = now
+        account.updatedAt = now
+
+        if delta != 0 {
+            let txn = Txn(
+                bookId: account.bookId,
+                type: .adjustment,
+                amountMinor: delta,
+                accountId: account.id,
+                occurredAt: now,
+                note: "余额校准"
+            )
+            context.insert(txn)
         }
 
-        let txn = Txn(
-            bookId: account.bookId,
-            type: .adjustment,
-            amountMinor: delta,
-            accountId: account.id,
-            note: "余额校准"
-        )
-        context.insert(txn)
-        try? context.save()
-
-        let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
-        let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
-        BalanceService.refreshAll(accounts: accounts, transactions: all)
-        try? context.save()
-
-        actualBalanceText = ""
-        reconcileMessage = "已调整 \(Money.format(delta))"
-        Haptics.success()
+        do {
+            try context.save()
+            let all = try context.fetch(FetchDescriptor<Txn>())
+            let accounts = try context.fetch(FetchDescriptor<Account>())
+            BalanceService.refreshAll(accounts: accounts, transactions: all)
+            try context.save()
+            actualBalanceText = ""
+            reconcileMessage = delta == 0
+                ? "账面与实际一致，已更新对账时间"
+                : "已调整 \(Money.format(BalanceService.displayBalance(delta, accountType: account.type), showSign: true))"
+            Haptics.success()
+        } catch {
+            reconcileMessage = "保存失败：\(error.localizedDescription)"
+            Haptics.warning()
+        }
     }
 }
 
@@ -338,6 +353,8 @@ struct StatementEntrySheet: View {
     @State private var amountText = ""
     @State private var minimumText = ""
     @State private var dueDate = Date()
+    @Query private var allTxns: [Txn]
+    @Query private var statements: [Statement]
 
     var body: some View {
         NavigationStack {
@@ -388,6 +405,11 @@ struct StatementEntrySheet: View {
         )
         statement.refreshStatus()
         context.insert(statement)
+        StatementSettlementService.rebuild(
+            accountId: account.id,
+            transactions: allTxns,
+            statements: statements.filter { $0.id != statement.id } + [statement]
+        )
         try? context.save()
         Haptics.success()
         dismiss()
@@ -404,12 +426,16 @@ struct StatementRepaySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var accounts: [Account]
     @Query private var statements: [Statement]
+    @Query private var allTxns: [Txn]
 
     @State private var amountText = ""
     @State private var paymentAccountId: UUID?
 
     private var paymentAccounts: [Account] {
-        accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && $0.id != account.id }
+        accounts.filter {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && !$0.type.isLiability
+                && $0.bookId == account.bookId && $0.id != account.id
+        }
     }
 
     var body: some View {
@@ -470,10 +496,11 @@ struct StatementRepaySheet: View {
         )
         context.insert(transfer)
 
-        // 一笔还款可能覆盖多期账单：按最早到期优先自动分摊
-        _ = StatementSettlementService.apply(
-            paymentMinor: amount,
-            statements: statements.filter { $0.accountId == account.id }
+        // 还款可能覆盖多期账单；统一按全部有效还款重建，后补账单与后续编辑也一致。
+        StatementSettlementService.rebuild(
+            accountId: account.id,
+            transactions: allTxns.filter { $0.id != transfer.id } + [transfer],
+            statements: statements
         )
         try? context.save()
 

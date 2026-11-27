@@ -64,7 +64,7 @@ enum InsightEngine {
 
         // 2. 单笔异常：超过该分类近 90 天单笔均值的 3 倍
         let recentStart = calendar.date(byAdding: .day, value: -90, to: Date()) ?? Date()
-        let recent = live.filter { $0.occurredAt >= recentStart && $0.type == .expense }
+        let recent = live.filter { $0.occurredAt >= recentStart && $0.type == .expense && $0.source != .reimbursement }
 
         var categoryAverage: [UUID: Int64] = [:]
         var categoryCount: [UUID: Int] = [:]
@@ -75,7 +75,7 @@ enum InsightEngine {
         }
 
         var outliers: [(txn: Txn, ratio: Double)] = []
-        for txn in live where txn.type == .expense && thisRange.contains(txn.occurredAt) {
+        for txn in live where txn.type == .expense && txn.source != .reimbursement && thisRange.contains(txn.occurredAt) {
             guard let categoryId = txn.categoryId,
                   let count = categoryCount[categoryId], count >= 3,
                   let total = categoryAverage[categoryId] else { continue }
@@ -99,7 +99,7 @@ enum InsightEngine {
 
         // 3. 订阅识别：同一备注在 3 个以上不同月份出现
         var monthsByNote: [String: Set<String>] = [:]
-        for txn in live where txn.type == .expense {
+        for txn in live where txn.type == .expense && txn.source != .reimbursement {
             guard let note = txn.note, note.count >= 2 else { continue }
             monthsByNote[note, default: []].insert(AppCalendar.monthKey(txn.occurredAt))
         }
@@ -137,13 +137,10 @@ enum InsightEngine {
             )
         }
 
-        // 5. 储蓄率
-        var income: Int64 = 0
-        var expense: Int64 = 0
-        for txn in live where thisRange.contains(txn.occurredAt) {
-            if txn.type == .income { income += txn.amountMinor }
-            if txn.type == .expense { expense += txn.amountMinor }
-        }
+        // 5. 储蓄率：沿用现金流口径，退款冲减支出且不计收入。
+        let summary = StatsEngine.summary(range: thisRange, caliber: .cashFlow, txns: live, claims: claims)
+        let income = summary.incomeMinor
+        let expense = summary.expenseMinor
         if income > 0 {
             let rate = Double(income - expense) / Double(income)
             if rate < 0.1 {
@@ -178,9 +175,13 @@ enum InsightEngine {
 
     private static func totals(in range: DateInterval, txns: [Txn]) -> [UUID: Int64] {
         var result: [UUID: Int64] = [:]
-        for txn in txns where txn.type == .expense && range.contains(txn.occurredAt) {
+        for txn in txns where txn.type == .expense && txn.source != .reimbursement && range.contains(txn.occurredAt) {
             guard let categoryId = txn.categoryId else { continue }
             result[categoryId, default: 0] += txn.amountMinor
+        }
+        for txn in txns where RefundService.isRefund(txn) && range.contains(txn.occurredAt) {
+            guard let categoryId = txn.categoryId else { continue }
+            result[categoryId, default: 0] -= txn.amountMinor
         }
         return result
     }

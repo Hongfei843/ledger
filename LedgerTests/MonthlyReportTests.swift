@@ -50,6 +50,7 @@ final class MonthlyReportTests: XCTestCase {
         XCTAssertEqual(report.incomeMinor, 50_000)
         XCTAssertEqual(report.netMinor, 42_000)
         XCTAssertEqual(report.savingsRatePercent, 84)
+        XCTAssertEqual(report.days.reduce(Int64(0)) { $0 + $1.expenseMinor }, 8_000)
     }
 
     func testCategoryRankingAndShare() {

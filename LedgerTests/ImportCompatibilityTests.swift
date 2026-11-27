@@ -142,4 +142,52 @@ final class ImportCompatibilityTests: XCTestCase {
         XCTAssertFalse(result.rows[0].isIncome)
         XCTAssertTrue(result.rows[1].isIncome)
     }
+
+    @MainActor
+    func testCookieImportDoesNotReuseOtherBookReferences() throws {
+        let container = ModelContainerFactory.preview()
+        self.container = container
+        let context = container.mainContext
+        let otherBook = Book(name: "其他账本")
+        let currentBook = Book(name: "当前账本")
+        context.insert(otherBook)
+        context.insert(currentBook)
+        let otherAccount = Account(bookId: otherBook.id, name: "招商", type: .debit)
+        let otherCategory = Category(bookId: otherBook.id, name: "餐饮", kind: .expense)
+        let fallback = Account(bookId: currentBook.id, name: "现金", type: .cash)
+        context.insert(otherAccount)
+        context.insert(otherCategory)
+        context.insert(fallback)
+        try context.save()
+
+        let record = CookieRecord(
+            externalId: nil,
+            occurredAt: Date(),
+            isIncome: false,
+            primaryCategory: "餐饮",
+            secondaryCategory: nil,
+            amountMinor: 1_200,
+            note: "午饭",
+            accountName: "招商",
+            bookName: nil,
+            tags: [],
+            emoji: nil,
+            needReimbursement: false
+        )
+        _ = ImportService.importCookie(
+            records: [record],
+            defaultAccountId: fallback.id,
+            bookId: currentBook.id,
+            context: context
+        )
+
+        let txn = try XCTUnwrap(context.fetch(FetchDescriptor<Txn>()).first)
+        let account = try XCTUnwrap(context.fetch(FetchDescriptor<Account>()).first { $0.id == txn.accountId })
+        let category = try XCTUnwrap(context.fetch(FetchDescriptor<Category>()).first { $0.id == txn.categoryId })
+        XCTAssertEqual(txn.bookId, currentBook.id)
+        XCTAssertEqual(account.bookId, currentBook.id)
+        XCTAssertEqual(category.bookId, currentBook.id)
+        XCTAssertNotEqual(account.id, otherAccount.id)
+        XCTAssertNotEqual(category.id, otherCategory.id)
+    }
 }

@@ -30,6 +30,7 @@ enum TxnSource: String, Codable {
     case recurring
     case ocr
     case sync
+    case reimbursement
 }
 
 /// 流水。money 一律 Int64 分，金额恒为正，方向由 type 决定。
@@ -108,6 +109,14 @@ final class Txn {
     }
 
     var isDeleted: Bool { deletedAt != nil }
+
+    /// 通用流水编辑器只支持三种基础类型；贷款关联流水必须由贷款模块维护。
+    var canEditInEntrySheet: Bool {
+        loanId == nil && (type == .expense || type == .income || type == .transfer)
+    }
+
+    /// 直接删除贷款还款流水会让还款计划与账户余额失去一致性。
+    var canDeleteFromTransactionList: Bool { loanId == nil }
 
     /// 是否是某笔支出的退款（统计里作为支出冲减，不算收入）
     var isRefund: Bool { type == .income && refundOfTxnId != nil }

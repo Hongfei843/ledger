@@ -34,7 +34,7 @@ enum ImportService {
         let existingTxns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         var knownExternalIds = Set(existingTxns.compactMap { $0.externalId })
 
-        let allCategories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
+        let allCategories = ((try? context.fetch(FetchDescriptor<Category>())) ?? []).filter { $0.bookId == bookId }
         var categoryIndex: [String: Category] = [:]
         for category in allCategories where category.deletedAt == nil {
             categoryIndex["\(category.kind.rawValue)|\(category.name)"] = category
@@ -42,7 +42,7 @@ enum ImportService {
 
         let allAccounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
         var accountIndex: [String: Account] = [:]
-        for account in allAccounts where account.deletedAt == nil {
+        for account in allAccounts where account.deletedAt == nil && account.bookId == bookId {
             accountIndex[account.name] = account
         }
 
@@ -126,7 +126,8 @@ enum ImportService {
         try? context.save()
 
         let allTxns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
-        BalanceService.refreshAll(accounts: allAccounts, transactions: allTxns)
+        let refreshedAccounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        BalanceService.refreshAll(accounts: refreshedAccounts, transactions: allTxns)
         try? context.save()
 
         return summary

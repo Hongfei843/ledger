@@ -68,6 +68,8 @@ struct EntrySheet: View {
     @State private var ocrHint: String?
     @State private var showSaveTemplate = false
     @State private var templateName = ""
+    @State private var saveError: String?
+    @State private var showAddAccount = false
     @State private var accountUsage: [UUID: Int] = [:]
     @State private var balanceCache: [UUID: Int64] = [:]
     @State private var showAddDetectedAccount = false
@@ -117,12 +119,8 @@ struct EntrySheet: View {
     }
 
     private var filteredAccounts: [Account] {
-        switch selectedType {
-        case .income:
-            return baseAccounts.filter { !$0.type.isLiability }
-        default:
-            return baseAccounts
-        }
+        // 信用卡退款、溢缴款也属于收入，不能因为账户是负债就悄悄换掉原账户。
+        baseAccounts
     }
 
     private var transferTargets: [Account] {
@@ -179,9 +177,11 @@ struct EntrySheet: View {
     }
 
     private var canSave: Bool {
-        guard amountMinor > 0 else { return false }
+        guard amountMinor > 0,
+              let accountId = selectedAccountId,
+              filteredAccounts.contains(where: { $0.id == accountId }) else { return false }
         if selectedType == .transfer {
-            return counterAccountId != nil && counterAccountId != selectedAccountId
+            return counterAccountId != nil && counterAccountId != accountId
         }
         return true
     }
@@ -202,7 +202,16 @@ struct EntrySheet: View {
                     templateStrip
                 }
 
-                if selectedType == .transfer {
+                if filteredAccounts.isEmpty {
+                    VStack(spacing: Theme.Spacing.s) {
+                        Label("当前账本还没有可用账户", systemImage: "wallet.bifold")
+                            .font(.subheadline)
+                        Button("先添加账户") { showAddAccount = true }
+                            .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Theme.Spacing.xl)
+                } else if selectedType == .transfer {
                     transferSection
                 } else {
                     accountStrip
@@ -263,12 +272,23 @@ struct EntrySheet: View {
                     )
                 }
             }
+            .sheet(isPresented: $showAddAccount, onDismiss: prepareDefaults) {
+                AccountEditView(account: nil)
+            }
             .alert("保存为常用组合", isPresented: $showSaveTemplate) {
                 TextField("名称，如 星巴克拿铁", text: $templateName)
                 Button("保存") { saveAsTemplate() }
                 Button("取消", role: .cancel) { templateName = "" }
             } message: {
                 Text("会记住当前类型、金额、账户、分类、商家和备注，下次一键套用。")
+            }
+            .alert("保存失败", isPresented: Binding(
+                get: { saveError != nil },
+                set: { if !$0 { saveError = nil } }
+            )) {
+                Button("知道了", role: .cancel) {}
+            } message: {
+                Text(saveError ?? "请稍后重试。")
             }
             .task {
                 // 统计频次放到渲染之后，避免打开面板时卡顿
@@ -298,9 +318,14 @@ struct EntrySheet: View {
             if !filteredCategories.contains(where: { $0.id == selectedCategoryId }) {
                 selectedCategoryId = filteredCategories.first?.id
             }
-            if selectedType == .income, let current = selectedAccountId,
+            if let current = selectedAccountId,
                !filteredAccounts.contains(where: { $0.id == current }) {
                 selectedAccountId = filteredAccounts.first?.id
+            }
+            if selectedType == .transfer {
+                if counterAccountId == nil || counterAccountId == selectedAccountId {
+                    counterAccountId = transferTargets.first?.id
+                }
             }
             // 注意：不要在这里重置 isReimbursable。
             // 用户可能只是去看一眼收入分类再切回来，勾选状态应该保留。
@@ -612,16 +637,6 @@ struct EntrySheet: View {
     private func applyTemplate(_ template: QuickTemplate) {
         guard let selection = QuickTemplateService.selection(from: template, accounts: accounts, categories: categories) else { return }
 
-        if selection.type == .transfer {
-            selectedType = .transfer
-            if let accountId = selection.accountId,
-               filteredAccounts.contains(where: { $0.id == accountId }) {
-                selectedAccountId = accountId
-            }
-            Haptics.selection()
-            return
-        }
-
         selectedType = selection.type
         if let amount = selection.amountMinor {
             amountText = Money.rawText(amount)
@@ -630,8 +645,12 @@ struct EntrySheet: View {
            filteredAccounts.contains(where: { $0.id == accountId }) {
             selectedAccountId = accountId
         }
-        if let categoryId = selection.categoryId,
-           filteredCategories.contains(where: { $0.id == categoryId }) {
+        if selection.type == .transfer {
+            if counterAccountId == nil || counterAccountId == selectedAccountId {
+                counterAccountId = transferTargets.first?.id
+            }
+        } else if let categoryId = selection.categoryId,
+                  filteredCategories.contains(where: { $0.id == categoryId }) {
             selectedCategoryId = categoryId
         }
         payee = selection.payee ?? ""
@@ -736,27 +755,25 @@ struct EntrySheet: View {
     }
 
     private func save() {
-        guard amountMinor > 0 else { return }
-        guard let accountId = selectedAccountId ?? filteredAccounts.first?.id else { return }
+        guard canSave, let accountId = selectedAccountId else { return }
         let bookId = currentBookId ?? books.first?.id ?? UUID()
+        let previousCreditAccountId = editingTxn?.type == .transfer ? editingTxn?.counterAccountId : nil
 
-        if selectedType == .transfer {
-            guard let targetId = counterAccountId, targetId != accountId else { return }
-        }
-
-        if let txn = editingTxn {
-            txn.type = selectedType
-            txn.amountMinor = amountMinor
-            txn.accountId = accountId
-            txn.counterAccountId = selectedType == .transfer ? counterAccountId : nil
-            txn.categoryId = selectedType == .transfer ? nil : selectedCategoryId
-            txn.note = note.isEmpty ? nil : note
-            txn.payee = payee.isEmpty ? nil : payee
-            txn.occurredAt = occurredAt
-            applyReimbursable(to: txn, bookId: bookId)
-            txn.updatedAt = Date()
+        let txn: Txn
+        if let editingTxn {
+            editingTxn.type = selectedType
+            editingTxn.amountMinor = amountMinor
+            editingTxn.accountId = accountId
+            editingTxn.counterAccountId = selectedType == .transfer ? counterAccountId : nil
+            editingTxn.categoryId = selectedType == .transfer ? nil : selectedCategoryId
+            editingTxn.note = note.isEmpty ? nil : note
+            editingTxn.payee = payee.isEmpty ? nil : payee
+            editingTxn.occurredAt = occurredAt
+            applyReimbursable(to: editingTxn, bookId: bookId)
+            editingTxn.updatedAt = Date()
+            txn = editingTxn
         } else {
-            let txn = Txn(
+            let newTxn = Txn(
                 bookId: bookId,
                 type: selectedType,
                 amountMinor: amountMinor,
@@ -767,25 +784,33 @@ struct EntrySheet: View {
                 payee: payee.isEmpty ? nil : payee,
                 note: note.isEmpty ? nil : note
             )
-            context.insert(txn)
-            applyReimbursable(to: txn, bookId: bookId)
+            context.insert(newTxn)
+            applyReimbursable(to: newTxn, bookId: bookId)
+            txn = newTxn
         }
 
-        try? context.save()
-        refreshBalances()
-
-        // 转账到信用卡 = 还款：自动按最早到期核销已登记账单
-        if editingTxn == nil, selectedType == .transfer, let targetId = counterAccountId,
-           let card = accounts.first(where: { $0.id == targetId }), card.type.isCreditLike {
-            _ = StatementSettlementService.apply(
-                paymentMinor: amountMinor,
-                statements: statements.filter { $0.accountId == card.id }
+        var impactedCreditAccounts: Set<UUID> = []
+        if let previousCreditAccountId { impactedCreditAccounts.insert(previousCreditAccountId) }
+        if selectedType == .transfer, let targetId = counterAccountId { impactedCreditAccounts.insert(targetId) }
+        let effectiveTxns = allTxns.filter { $0.id != txn.id } + [txn]
+        for targetId in impactedCreditAccounts {
+            guard let card = accounts.first(where: { $0.id == targetId }), card.type.isCreditLike else { continue }
+            StatementSettlementService.rebuild(
+                accountId: targetId,
+                transactions: effectiveTxns,
+                statements: statements
             )
-            try? context.save()
+        }
+
+        do {
+            try context.save()
+            refreshBalances()
+        } catch {
+            saveError = error.localizedDescription
+            return
         }
 
         Haptics.success()
-
         if let categoryId = selectedCategoryId {
             UserDefaults.standard.set(categoryId.uuidString, forKey: Self.lastCategoryKey)
         }
@@ -793,7 +818,6 @@ struct EntrySheet: View {
 
         let categoryName = filteredCategories.first { $0.id == selectedCategoryId }?.name ?? "已记录"
         onSaved?("\(categoryName) \(Money.format(amountMinor))")
-
         dismiss()
     }
 

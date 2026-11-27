@@ -2,6 +2,14 @@ import Foundation
 
 /// 余额计算：资产为正、负债为负，统一一个公式。
 /// balance = opening + Σincome − Σexpense + ΣtransferIn − ΣtransferOut + Σadjustment
+/// 同一批账户下的资产、负债与净资产。总资产 - 总负债始终等于净资产。
+struct NetWorthTotals: Equatable {
+    var assetsMinor: Int64
+    var liabilitiesMinor: Int64
+
+    var netWorthMinor: Int64 { assetsMinor - liabilitiesMinor }
+}
+
 enum BalanceService {
     static func balance(of account: Account, transactions: [Txn], openingBalanceMinor: Int64) -> Int64 {
         var balance = openingBalanceMinor
@@ -44,11 +52,51 @@ enum BalanceService {
         }
     }
 
-    /// 净资产 = Σ 资产账户 + Σ 负债账户（负债为负）
-    static func netWorth(accounts: [Account], transactions: [Txn]) -> Int64 {        accounts
-            .filter { $0.deletedAt == nil && !$0.isArchived && $0.includeInNetWorth && $0.type != .loan }
-            .reduce(Int64(0)) { partial, account in
-                partial + balance(of: account, transactions: transactions, openingBalanceMinor: account.openingBalanceMinor)
+    /// 净资产口径的唯一入口：归档、已删除、主动排除及贷款系统账户均不参与。
+    /// 正余额计入资产、负余额计入负债，避免信用卡溢缴款被错误算成负债。
+    static func totals(
+        accounts: [Account],
+        transactions: [Txn],
+        bookId: UUID? = nil
+    ) -> NetWorthTotals {
+        let eligible = accounts.filter { account in
+            (bookId == nil || account.bookId == bookId)
+                && account.deletedAt == nil
+                && !account.isArchived
+                && account.includeInNetWorth
+                && account.type != .loan
+        }
+        var balances = Dictionary(uniqueKeysWithValues: eligible.map { ($0.id, $0.openingBalanceMinor) })
+        for txn in transactions where txn.deletedAt == nil && (bookId == nil || txn.bookId == bookId) {
+            let change = delta(txn)
+            if let source = change.source, balances[txn.accountId] != nil {
+                balances[txn.accountId] = (balances[txn.accountId] ?? 0) + source
             }
+            if let targetId = change.targetAccountId, balances[targetId] != nil {
+                balances[targetId] = (balances[targetId] ?? 0) + change.target
+            }
+        }
+
+        var assets: Int64 = 0
+        var liabilities: Int64 = 0
+        for balance in balances.values {
+            if balance >= 0 { assets += balance } else { liabilities += -balance }
+        }
+        return NetWorthTotals(assetsMinor: assets, liabilitiesMinor: liabilities)
+    }
+
+    static func netWorth(accounts: [Account], transactions: [Txn]) -> Int64 {
+        totals(accounts: accounts, transactions: transactions).netWorthMinor
+    }
+
+    /// 负债账户在校准界面填写「实际欠款」，领域层内部仍使用带符号余额。
+    /// 溢缴款可输入负数，转换后即正余额。
+    static func signedBalance(fromActualInput amountMinor: Int64, accountType: AccountType) -> Int64 {
+        accountType.isLiability ? -amountMinor : amountMinor
+    }
+
+    /// 把内部带符号余额转为用户熟悉的展示方式：信用卡欠款显示正数。
+    static func displayBalance(_ amountMinor: Int64, accountType: AccountType) -> Int64 {
+        accountType.isLiability ? -amountMinor : amountMinor
     }
 }

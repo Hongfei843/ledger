@@ -11,6 +11,8 @@ struct TxnDetailView: View {
     @Query(sort: \Txn.occurredAt, order: .reverse) private var allTxns: [Txn]
     @Query private var categories: [Category]
     @Query private var accounts: [Account]
+    @Query private var statements: [Statement]
+    @Query private var loans: [Loan]
 
     @State private var showEdit = false
     @State private var showRefund = false
@@ -76,7 +78,7 @@ struct TxnDetailView: View {
                 refundSourceSection(originalTxn)
             }
 
-            if txn.type == .expense {
+            if txn.type == .expense && txn.source != .reimbursement && txn.loanId == nil {
                 refundActionSection
             }
 
@@ -100,22 +102,36 @@ struct TxnDetailView: View {
                 siblingsSection
             }
 
-            Section {
-                Button(role: .destructive) {
-                    showDeleteConfirm = true
-                } label: {
-                    Text("删除这条记录")
-                        .frame(maxWidth: .infinity)
+            if txn.canDeleteFromTransactionList {
+                Section {
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Text("删除这条记录")
+                            .frame(maxWidth: .infinity)
+                    }
+                } footer: {
+                    Text(sourceText)
                 }
-            } footer: {
-                Text(sourceText)
+            } else if let loanId = txn.loanId, let loan = loans.first(where: { $0.id == loanId }) {
+                Section {
+                    NavigationLink {
+                        LoanDetailView(loan: loan)
+                    } label: {
+                        Label("前往贷款详情管理这笔还款", systemImage: "house")
+                    }
+                } footer: {
+                    Text("贷款还款与还款计划联动，不能在通用流水页直接修改或删除。")
+                }
             }
         }
         .navigationTitle("记录详情")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("编辑") { showEdit = true }
+            if txn.canEditInEntrySheet {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("编辑") { showEdit = true }
+                }
             }
         }
         .sheet(isPresented: $showEdit) {
@@ -209,6 +225,7 @@ struct TxnDetailView: View {
         case .recurring: return "来源：周期记账"
         case .ocr: return "来源：截图识别"
         case .sync: return "来源：同步"
+        case .reimbursement: return "来源：报销到账时自动生成的差额，不属于新的现金支出"
         }
     }
 
@@ -361,6 +378,13 @@ struct TxnDetailView: View {
         for item in victims {
             item.deletedAt = Date()
             item.updatedAt = Date()
+        }
+        if txn.type == .transfer, let creditAccountId = txn.counterAccountId {
+            StatementSettlementService.rebuild(
+                accountId: creditAccountId,
+                transactions: allTxns,
+                statements: statements
+            )
         }
         try? context.save()
 

@@ -200,6 +200,15 @@ enum BackupService {
 
         try context.save()
 
+        // 恢复可能带来另一组账本 ID，立即修正当前账本，避免界面看起来像“数据消失”。
+        let restoredBooks = try context.fetch(FetchDescriptor<Book>())
+        let liveBooks = restoredBooks.filter { $0.deletedAt == nil }
+        if let current = BookScope.currentId, liveBooks.contains(where: { $0.id == current }) {
+            // 保留仍然有效的选择。
+        } else {
+            BookScope.setCurrent(liveBooks.first(where: { $0.isDefault })?.id ?? liveBooks.first?.id)
+        }
+
         // 用恢复后的数据重算账户余额缓存
         let accounts = try context.fetch(FetchDescriptor<Account>())
         let txns = try context.fetch(FetchDescriptor<Txn>())

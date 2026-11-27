@@ -18,7 +18,7 @@ struct DuplicateReviewView: View {
         var buckets: [String: [Txn]] = [:]
         for txn in txns {
             let day = AppCalendar.startOfDay(txn.occurredAt).timeIntervalSince1970
-            let key = "\(Int(day))|\(txn.amountMinor)|\(txn.accountId.uuidString)|\(txn.note ?? "")"
+            let key = "\(Int(day))|\(txn.typeRaw)|\(txn.amountMinor)|\(txn.accountId.uuidString)|\(txn.counterAccountId?.uuidString ?? "")|\(txn.note ?? "")"
             buckets[key, default: []].append(txn)
         }
         return buckets

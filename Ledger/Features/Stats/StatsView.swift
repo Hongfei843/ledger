@@ -32,7 +32,7 @@ struct StatsView: View {
     }
 
     private var buckets: [MonthBucket] {
-        StatsEngine.byMonth(months: 6, endingAt: monthAnchor, txns: liveTxns)
+        StatsEngine.byMonth(months: 6, endingAt: monthAnchor, txns: liveTxns, claims: liveClaims, caliber: caliber)
     }
 
     private var totalExpense: Int64 {
@@ -123,11 +123,11 @@ struct StatsView: View {
     private var summaryCard: some View {
         VStack(spacing: Theme.Spacing.m) {
             HStack {
-                metric(title: "支出", value: Money.format(summary.expenseMinor), color: .primary)
+                metric(title: caliber == .advance ? "垫付" : "支出", value: Money.format(summary.expenseMinor), color: .primary)
                 Divider().frame(height: 28)
-                metric(title: "收入", value: Money.format(summary.incomeMinor), color: Theme.income)
+                metric(title: caliber == .advance ? "报销到账" : "收入", value: Money.format(summary.incomeMinor), color: Theme.income)
                 Divider().frame(height: 28)
-                metric(title: "结余", value: Money.format(summary.balanceMinor), color: .primary)
+                metric(title: "净额", value: Money.format(summary.balanceMinor), color: .primary)
             }
             if summary.pendingMinor > 0 {
                 HStack {
@@ -162,7 +162,7 @@ struct StatsView: View {
         Group {
             if !insights.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                    Text("洞察")
+                    Text("现金流洞察")
                         .font(.subheadline.weight(.semibold))
 
                     ForEach(insights) { insight in
@@ -210,7 +210,7 @@ struct StatsView: View {
 
     private var donutSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Text("支出构成")
+            Text(caliber == .advance ? "垫付构成" : "支出构成")
                 .font(.subheadline.weight(.semibold))
 
             if slices.isEmpty {
@@ -223,7 +223,7 @@ struct StatsView: View {
                         innerRadius: .ratio(0.62),
                         angularInset: 1.5
                     )
-                    .foregroundStyle(palette[index % palette.count])
+                    .foregroundStyle(categoryColor(for: slice))
                     .annotation(position: .overlay) {
                         let ratio = totalExpense > 0 ? Double(slice.amountMinor) / Double(totalExpense) : 0
                         if ratio >= 0.08 {
@@ -252,17 +252,13 @@ struct StatsView: View {
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
     }
 
-    private var palette: [Color] {
-        Theme.chartPalette(max(1, min(slices.count, 8)))
-    }
-
     /// 环形图图例：颜色 + 分类名 + 占比
     private var legendGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 6) {
             ForEach(Array(slices.prefix(8).enumerated()), id: \.element.id) { index, slice in
                 HStack(spacing: 5) {
                     Circle()
-                        .fill(palette[index % palette.count])
+                        .fill(categoryColor(for: slice))
                         .frame(width: 8, height: 8)
                     Text(slice.name)
                         .font(.caption2)
@@ -275,6 +271,11 @@ struct StatsView: View {
                 }
             }
         }
+    }
+
+    private func categoryColor(for slice: CategorySlice) -> Color {
+        guard let category = scopedCategories.first(where: { $0.id == slice.id }) else { return Theme.accent }
+        return Color(hex: category.colorHex) ?? Theme.accent
     }
 
     private func percent(of slice: CategorySlice) -> Double {
@@ -298,9 +299,9 @@ struct StatsView: View {
             } else {
                 ForEach(Array(slices.prefix(10).enumerated()), id: \.element.id) { index, slice in
                     NavigationLink {
-                        CategoryTxnListView(categoryId: slice.id, range: interval, title: slice.name)
+                        CategoryTxnListView(categoryId: slice.id, range: interval, title: slice.name, caliber: caliber)
                     } label: {
-                        rankRow(slice, color: palette[index % palette.count])
+                        rankRow(slice, color: categoryColor(for: slice))
                     }
                     .buttonStyle(.plain)
                 }
@@ -352,7 +353,7 @@ struct StatsView: View {
 
     private var trendSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Text("近 6 个月支出")
+            Text(caliber == .advance ? "近 6 个月垫付" : "近 6 个月支出")
                 .font(.subheadline.weight(.semibold))
 
             Chart(buckets) { bucket in
@@ -372,7 +373,7 @@ struct StatsView: View {
     }
 
     private var emptyHint: some View {
-        Text("本月还没有支出记录")
+        Text(caliber == .advance ? "本月还没有垫付记录" : "本月还没有支出记录")
             .font(.caption)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)

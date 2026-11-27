@@ -65,7 +65,7 @@ struct TransactionListView: View {
     }
 
     private var periodExpense: Int64 {
-        let gross = periodTxns.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let gross = periodTxns.filter { $0.type == .expense && $0.source != .reimbursement }.reduce(Int64(0)) { $0 + $1.amountMinor }
         return RefundService.netExpense(expenseMinor: gross, refundMinor: periodRefund)
     }
 
@@ -83,7 +83,7 @@ struct TransactionListView: View {
         }
         return buckets.keys.sorted(by: >).map { key in
             let items = buckets[key] ?? []
-            let gross = items.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+            let gross = items.filter { $0.type == .expense && $0.source != .reimbursement }.reduce(Int64(0)) { $0 + $1.amountMinor }
             let refund = items.filter { RefundService.isRefund($0) }.reduce(Int64(0)) { $0 + $1.amountMinor }
             return DayGroup(id: key, day: key, items: items, expenseMinor: RefundService.netExpense(expenseMinor: gross, refundMinor: refund))
         }
@@ -150,32 +150,6 @@ struct TransactionListView: View {
     }
 
     /// 一次遍历算出所有账户余额。
-    /// 之前每个卡片各算一次，账户多时是 O(账户 × 流水)，列表滚动会卡。
-    private var accountBalances: [UUID: Int64] {
-        var map: [UUID: Int64] = [:]
-        for account in accounts where account.deletedAt == nil && !account.isArchived && bookMatches(account.bookId) {
-            map[account.id] = account.openingBalanceMinor
-        }
-        for txn in activeTxns {
-            switch txn.type {
-            case .expense:
-                if let value = map[txn.accountId] { map[txn.accountId] = value - txn.amountMinor }
-            case .income:
-                if let value = map[txn.accountId] { map[txn.accountId] = value + txn.amountMinor }
-            case .transfer:
-                if let value = map[txn.accountId] { map[txn.accountId] = value - txn.amountMinor }
-                if let counter = txn.counterAccountId, let value = map[counter] {
-                    map[counter] = value + txn.amountMinor
-                }
-            case .adjustment:
-                if let value = map[txn.accountId] { map[txn.accountId] = value + txn.amountMinor }
-            case .loanPayment:
-                break
-            }
-        }
-        return map
-    }
-
     /// 每笔支出已退款合计（单次遍历，供列表与净支出展示）
     private var refundedByTxnId: [UUID: Int64] {
         var map: [UUID: Int64] = [:]
@@ -188,11 +162,10 @@ struct TransactionListView: View {
     }
 
     var body: some View {
-        let balances = accountBalances
-        return NavigationStack {
+        NavigationStack {
             ZStack(alignment: .bottomTrailing) {
                 VStack(spacing: 0) {
-                    homeHeader(balances)
+                    homeHeader()
 
                     List {
                         if !dueReminders.isEmpty {
@@ -248,16 +221,24 @@ struct TransactionListView: View {
                                         )
                                     }
                                     .swipeActions(edge: .leading) {
-                                        Button {
-                                            editingTxn = txn
-                                        } label: {
-                                            Text("编辑")
+                                        if txn.canEditInEntrySheet {
+                                            Button {
+                                                editingTxn = txn
+                                            } label: {
+                                                Text("编辑")
+                                            }
+                                            .tint(Theme.accent)
                                         }
-                                        .tint(Theme.accent)
                                     }
-                                }
-                                .onDelete { offsets in
-                                    delete(at: offsets, in: group)
+                                    .swipeActions(edge: .trailing) {
+                                        if txn.canDeleteFromTransactionList {
+                                            Button(role: .destructive) {
+                                                delete(txn)
+                                            } label: {
+                                                Label("删除", systemImage: "trash")
+                                            }
+                                        }
+                                    }
                                 }
                             } header: {
                                 HStack {
@@ -398,6 +379,26 @@ struct TransactionListView: View {
     // MARK: - 周期切换
 
     private var periodMenu: some View {
+        HStack(spacing: 2) {
+            Button { period = period.shifted(by: -1) } label: {
+                Image(systemName: "chevron.left")
+                    .frame(width: 28, height: 28)
+            }
+            .disabled(period.kind == .custom)
+            .accessibilityLabel("上一期")
+
+            periodPicker
+
+            Button { period = period.shifted(by: 1) } label: {
+                Image(systemName: "chevron.right")
+                    .frame(width: 28, height: 28)
+            }
+            .disabled(period.kind == .custom)
+            .accessibilityLabel("下一期")
+        }
+    }
+
+    private var periodPicker: some View {
         Menu {
             Button {
                 period = period.shifted(by: -1)
@@ -472,9 +473,9 @@ struct TransactionListView: View {
 
     // MARK: - 汇总
 
-    private func homeHeader(_ balances: [UUID: Int64]) -> some View {
+    private func homeHeader() -> some View {
         VStack(spacing: Theme.Spacing.m) {
-            monthSummaryCard(balances)
+            monthSummaryCard()
                 .padding(.horizontal, Theme.Spacing.l)
         }
         .padding(.top, Theme.Spacing.xs)
@@ -482,12 +483,12 @@ struct TransactionListView: View {
         .background(Theme.pageBackground)
     }
 
-    private func monthSummaryCard(_ balances: [UUID: Int64]) -> some View {
-        let netWorth = balances.values.reduce(Int64(0), +)
+    private func monthSummaryCard() -> some View {
+        let netWorth = BalanceService.totals(accounts: accounts, transactions: allTxns, bookId: BookScope.currentId).netWorthMinor
         return VStack(spacing: Theme.Spacing.s) {
             HStack(spacing: Theme.Spacing.s) {
-                summaryTile(title: "支出", emoji: "💸", amount: periodExpense, color: .primary)
-                summaryTile(title: "收入", emoji: "💰", amount: periodIncome, color: Theme.income)
+                summaryTile(title: "支出", systemImage: "arrow.up.right", amount: periodExpense, color: Theme.expense)
+                summaryTile(title: "收入", systemImage: "arrow.down.left", amount: periodIncome, color: Theme.income)
             }
 
             NavigationLink {
@@ -511,10 +512,14 @@ struct TransactionListView: View {
         }
     }
 
-    private func summaryTile(title: String, emoji: String, amount: Int64, color: Color) -> some View {
+    private func summaryTile(title: String, systemImage: String, amount: Int64, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 5) {
-                Text(emoji).font(.system(size: 13))
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(color)
+                    .frame(width: 22, height: 22)
+                    .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -546,18 +551,6 @@ struct TransactionListView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// 资产为正、负债为负，直接相加即净资产
-    private var netWorthMinor: Int64 {        accounts
-            .filter { $0.deletedAt == nil && !$0.isArchived }
-            .reduce(Int64(0)) { partial, account in
-                partial + BalanceService.balance(
-                    of: account,
-                    transactions: activeTxns,
-                    openingBalanceMinor: account.openingBalanceMinor
-                )
-            }
-    }
-
     /// 昨日支出
     private var yesterdayExpense: Int64 {
         let calendar = AppCalendar.gregorian
@@ -565,7 +558,7 @@ struct TransactionListView: View {
         let start = calendar.startOfDay(for: yesterday)
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
         let inDay = activeTxns.filter { $0.occurredAt >= start && $0.occurredAt < end }
-        let gross = inDay.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let gross = inDay.filter { $0.type == .expense && $0.source != .reimbursement }.reduce(Int64(0)) { $0 + $1.amountMinor }
         let refund = inDay.filter { RefundService.isRefund($0) }.reduce(Int64(0)) { $0 + $1.amountMinor }
         return RefundService.netExpense(expenseMinor: gross, refundMinor: refund)
     }
@@ -578,7 +571,7 @@ struct TransactionListView: View {
         guard let previousStart = calendar.date(byAdding: .month, value: -1, to: current.start) else { return nil }
         let previous = DateInterval(start: previousStart, end: current.start)
         let previousTxns = activeTxns.filter { previous.contains($0.occurredAt) }
-        let previousGross = previousTxns.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let previousGross = previousTxns.filter { $0.type == .expense && $0.source != .reimbursement }.reduce(Int64(0)) { $0 + $1.amountMinor }
         let previousRefund = previousTxns.filter { RefundService.isRefund($0) }.reduce(Int64(0)) { $0 + $1.amountMinor }
         let previousExpense = RefundService.netExpense(expenseMinor: previousGross, refundMinor: previousRefund)
         guard previousExpense > 0 else { return nil }
@@ -631,7 +624,7 @@ struct TransactionListView: View {
                 .foregroundStyle(.tertiary)
             Text("\(greeting)，这里还空着")
                 .font(.headline)
-            Text("点右下角的 + 记第一笔")
+            Text("点右下角的「记一笔」开始")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -677,21 +670,24 @@ struct TransactionListView: View {
         accounts.first { $0.id == txn.accountId }?.displayName ?? "—"
     }
 
-    private func delete(at offsets: IndexSet, in group: DayGroup) {
-        var removed: [Txn] = []
-        for index in offsets {
-            let txn = group.items[index]
-            txn.deletedAt = Date()
-            txn.updatedAt = Date()
-            removed.append(txn)
-            // 删支出时连带软删除它的退款流水，撤销时一起恢复
-            if txn.type == .expense {
-                for refund in RefundService.refunds(of: txn, all: activeTxns) {
-                    refund.deletedAt = Date()
-                    refund.updatedAt = Date()
-                    removed.append(refund)
-                }
+    private func delete(_ txn: Txn) {
+        var removed: [Txn] = [txn]
+        txn.deletedAt = Date()
+        txn.updatedAt = Date()
+        // 删支出时连带软删除它的退款流水，撤销时一起恢复。
+        if txn.type == .expense {
+            for refund in RefundService.refunds(of: txn, all: activeTxns) {
+                refund.deletedAt = Date()
+                refund.updatedAt = Date()
+                removed.append(refund)
             }
+        }
+        if txn.type == .transfer, let creditAccountId = txn.counterAccountId {
+            StatementSettlementService.rebuild(
+                accountId: creditAccountId,
+                transactions: allTxns,
+                statements: statements
+            )
         }
         try? context.save()
         refreshBalances()
@@ -704,11 +700,18 @@ struct TransactionListView: View {
     }
 
     private func restoreDeleted() {
-        for txn in deletedBuffer {
+        let restored = deletedBuffer
+        let creditAccountIds = Set(restored.compactMap { $0.type == .transfer ? $0.counterAccountId : nil })
+        for txn in restored {
             txn.deletedAt = nil
             txn.updatedAt = Date()
         }
         deletedBuffer = []
+        let restoredIds = Set(restored.map { $0.id })
+        let transactions = allTxns.filter { !restoredIds.contains($0.id) } + restored
+        for accountId in creditAccountIds {
+            StatementSettlementService.rebuild(accountId: accountId, transactions: transactions, statements: statements)
+        }
         try? context.save()
         refreshBalances()
         Haptics.success()

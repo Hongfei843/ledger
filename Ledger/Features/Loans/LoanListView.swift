@@ -158,13 +158,17 @@ struct NewLoanSheet: View {
     @State private var paymentAccountId: UUID?
 
     private var paymentAccounts: [Account] {
-        accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+        let bookId = BookScope.currentId ?? books.first?.id
+        return accounts.filter {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && !$0.type.isLiability
+                && $0.bookId == bookId
+        }
     }
 
     private var previewItems: [ScheduledPayment] {
         guard let principal = Money.parse(principalText), principal > 0,
-              let rate = Double(rateText),
-              let term = Int(termText), term > 0 else {
+              let rate = Double(rateText), rate.isFinite, (0...100).contains(rate),
+              let term = Int(termText), (1...1200).contains(term) else {
             return []
         }
         return LoanCalculator.schedule(
@@ -259,9 +263,9 @@ struct NewLoanSheet: View {
     }
 
     private func save() {
-        guard let principal = Money.parse(principalText),
-              let rate = Double(rateText),
-              let term = Int(termText),
+        guard let principal = Money.parse(principalText), principal > 0,
+              let rate = Double(rateText), rate.isFinite, (0...100).contains(rate),
+              let term = Int(termText), (1...1200).contains(term),
               let accountId = paymentAccountId,
               let bookId = BookScope.currentId ?? books.first?.id else { return }
 

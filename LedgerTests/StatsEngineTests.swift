@@ -109,4 +109,77 @@ final class StatsEngineTests: XCTestCase {
         XCTAssertEqual(slices[0].count, 2)
         XCTAssertEqual(slices[1].name, "交通")
     }
+
+    func testRefundOfPendingReimbursementDoesNotReducePersonalExpense() {
+        let claim = makeDraftClaim()
+        let original = Txn(bookId: bookId, type: .expense, amountMinor: 5_000, accountId: accountId)
+        original.isReimbursable = true
+        original.claimId = claim.id
+        let refund = Txn(bookId: bookId, type: .income, amountMinor: 2_000, accountId: accountId)
+        refund.refundOfTxnId = original.id
+
+        let personal = StatsEngine.summary(
+            range: currentRange(),
+            caliber: .personal,
+            txns: [original, refund],
+            claims: [claim]
+        )
+        let cashFlow = StatsEngine.summary(
+            range: currentRange(),
+            caliber: .cashFlow,
+            txns: [original, refund],
+            claims: [claim]
+        )
+        XCTAssertEqual(personal.expenseMinor, 0)
+        XCTAssertEqual(personal.pendingMinor, 3_000)
+        XCTAssertEqual(cashFlow.expenseMinor, 3_000)
+    }
+
+    func testReimbursedClaimOnlyCountsShortfallAsPersonalExpense() {
+        let claim = makeDraftClaim()
+        claim.status = .reimbursed
+        let original = Txn(bookId: bookId, type: .expense, amountMinor: 5_000, accountId: accountId)
+        original.isReimbursable = true
+        original.claimId = claim.id
+        let income = Txn(bookId: bookId, type: .income, amountMinor: 3_000, accountId: accountId)
+        income.claimId = claim.id
+        let shortfall = Txn(
+            bookId: bookId,
+            type: .expense,
+            amountMinor: 2_000,
+            accountId: accountId,
+            source: .reimbursement
+        )
+        shortfall.claimId = claim.id
+
+        let all = [original, income, shortfall]
+        let personal = StatsEngine.summary(range: currentRange(), caliber: .personal, txns: all, claims: [claim])
+        let cashFlow = StatsEngine.summary(range: currentRange(), caliber: .cashFlow, txns: all, claims: [claim])
+        let advance = StatsEngine.summary(range: currentRange(), caliber: .advance, txns: all, claims: [claim])
+
+        XCTAssertEqual(personal.expenseMinor, 2_000)
+        XCTAssertEqual(personal.incomeMinor, 0)
+        XCTAssertEqual(cashFlow.expenseMinor, 5_000)
+        XCTAssertEqual(cashFlow.incomeMinor, 3_000)
+        XCTAssertEqual(advance.expenseMinor, 5_000)
+        XCTAssertEqual(advance.incomeMinor, 3_000)
+    }
+
+    func testMonthlyTrendUsesSelectedCaliber() {
+        let claim = makeDraftClaim()
+        let normal = Txn(bookId: bookId, type: .expense, amountMinor: 1_000, accountId: accountId)
+        let pending = Txn(bookId: bookId, type: .expense, amountMinor: 4_000, accountId: accountId)
+        pending.isReimbursable = true
+        pending.claimId = claim.id
+
+        let buckets = StatsEngine.byMonth(
+            months: 1,
+            endingAt: Date(),
+            txns: [normal, pending],
+            claims: [claim],
+            caliber: .personal
+        )
+        XCTAssertEqual(buckets.count, 1)
+        XCTAssertEqual(buckets[0].expenseMinor, 1_000)
+    }
 }

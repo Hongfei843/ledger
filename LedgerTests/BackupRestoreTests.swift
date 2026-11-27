@@ -153,6 +153,7 @@ final class BackupRestoreTests: XCTestCase {
 
         let accounts = try context.fetch(FetchDescriptor<Account>())
         XCTAssertEqual(accounts.count, 2)
+        XCTAssertEqual(BookScope.currentId, accounts.first?.bookId)
         let cash = try XCTUnwrap(accounts.first { $0.id == seeded.cashId })
         XCTAssertEqual(cash.openingBalanceMinor, 100_000)
         // 已删除流水不参与余额计算
@@ -243,5 +244,23 @@ final class BackupRestoreTests: XCTestCase {
         XCTAssertNotNil(second.autoBackupURL) // 恢复后又有数据，仍然留副本
         let accounts = try context.fetch(FetchDescriptor<Account>())
         XCTAssertEqual(accounts.count, 2)
+    }
+
+    @MainActor
+    func testDefaultCategoriesAreSeededPerBookWithoutDuplicates() throws {
+        let context = makeContext()
+        let first = Book(name: "日常")
+        let second = Book(name: "家庭")
+        context.insert(first)
+        context.insert(second)
+
+        SeedData.seedCategoriesIfNeeded(context: context, bookId: first.id)
+        SeedData.seedCategoriesIfNeeded(context: context, bookId: second.id)
+        SeedData.seedCategoriesIfNeeded(context: context, bookId: second.id)
+
+        let categories = try context.fetch(FetchDescriptor<Category>())
+        let expectedCount = SeedData.expenseCategories.count + SeedData.incomeCategories.count
+        XCTAssertEqual(categories.filter { $0.bookId == first.id }.count, expectedCount)
+        XCTAssertEqual(categories.filter { $0.bookId == second.id }.count, expectedCount)
     }
 }

@@ -85,4 +85,68 @@ final class StatementSettlementTests: XCTestCase {
         XCTAssertEqual(statement.status, .partial)
         XCTAssertEqual(statement.outstandingMinor, 20_000)
     }
+
+    func testRebuildReflectsPaymentEditAndDeletion() {
+        let statement = makeStatement(30_000, dueDay: 10)
+        let payment = Txn(
+            bookId: bookId,
+            type: .transfer,
+            amountMinor: 30_000,
+            accountId: UUID(),
+            occurredAt: date(2026, 3, 8),
+            counterAccountId: accountId
+        )
+
+        StatementSettlementService.rebuild(
+            accountId: accountId,
+            transactions: [payment],
+            statements: [statement],
+            at: date(2026, 3, 15)
+        )
+        XCTAssertEqual(statement.paidAmountMinor, 30_000)
+        XCTAssertEqual(statement.paidAt, payment.occurredAt)
+
+        payment.amountMinor = 10_000
+        StatementSettlementService.rebuild(
+            accountId: accountId,
+            transactions: [payment],
+            statements: [statement],
+            at: date(2026, 3, 15)
+        )
+        XCTAssertEqual(statement.paidAmountMinor, 10_000)
+        XCTAssertEqual(statement.outstandingMinor, 20_000)
+        XCTAssertNil(statement.paidAt)
+
+        payment.deletedAt = Date()
+        StatementSettlementService.rebuild(
+            accountId: accountId,
+            transactions: [payment],
+            statements: [statement],
+            at: date(2026, 3, 15)
+        )
+        XCTAssertEqual(statement.paidAmountMinor, 0)
+        XCTAssertEqual(statement.outstandingMinor, 30_000)
+    }
+
+    func testRebuildAppliesHistoricalPaymentsToLateRegisteredStatements() {
+        let first = makeStatement(30_000, dueDay: 10)
+        let second = makeStatement(20_000, dueDay: 20)
+        let payment = Txn(
+            bookId: bookId,
+            type: .transfer,
+            amountMinor: 40_000,
+            accountId: UUID(),
+            occurredAt: date(2026, 3, 9),
+            counterAccountId: accountId
+        )
+
+        StatementSettlementService.rebuild(
+            accountId: accountId,
+            transactions: [payment],
+            statements: [second, first],
+            at: date(2026, 3, 21)
+        )
+        XCTAssertEqual(first.paidAmountMinor, 30_000)
+        XCTAssertEqual(second.paidAmountMinor, 10_000)
+    }
 }

@@ -79,7 +79,7 @@ enum MonthlyReportBuilder {
         let categoryById = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
 
         var buckets: [UUID: Int64] = [:]
-        for txn in inMonth where txn.type == .expense {
+        for txn in inMonth where txn.type == .expense && txn.source != .reimbursement {
             buckets[txn.categoryId ?? unclassifiedId, default: 0] += txn.amountMinor
         }
         // 退款冲减原分类
@@ -109,7 +109,7 @@ enum MonthlyReportBuilder {
             .map { $0 }
 
         let topExpenses = inMonth
-            .filter { $0.type == .expense }
+            .filter { $0.type == .expense && $0.source != .reimbursement }
             .sorted { $0.amountMinor > $1.amountMinor }
             .prefix(5)
             .map { txn in
@@ -127,9 +127,11 @@ enum MonthlyReportBuilder {
         for txn in inMonth {
             let day = calendar.startOfDay(for: txn.occurredAt)
             switch txn.type {
-            case .expense:
+            case .expense where txn.source != .reimbursement:
                 dayExpense[day, default: 0] += txn.amountMinor
-            case .income where !RefundService.isRefund(txn):
+            case .income where RefundService.isRefund(txn):
+                dayExpense[day, default: 0] -= txn.amountMinor
+            case .income:
                 dayIncome[day, default: 0] += txn.amountMinor
             default:
                 break
@@ -164,7 +166,7 @@ enum MonthlyReportBuilder {
     }
 
     private static func computeTotals(txns: [Txn]) -> (income: Int64, expense: Int64) {
-        let gross = txns.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let gross = txns.filter { $0.type == .expense && $0.source != .reimbursement }.reduce(Int64(0)) { $0 + $1.amountMinor }
         let refund = txns.filter { RefundService.isRefund($0) }.reduce(Int64(0)) { $0 + $1.amountMinor }
         let income = txns
             .filter { $0.type == .income && !RefundService.isRefund($0) }

@@ -12,6 +12,7 @@ struct LoanDetailView: View {
     @State private var showPrepay = false
     @State private var prepayText = ""
     @State private var strategy: PrepayStrategy = .shortenTerm
+    @State private var actionError: String?
 
     private var items: [LoanScheduleItem] {
         allItems
@@ -32,11 +33,11 @@ struct LoanDetailView: View {
     }
 
     private var liabilityAccount: Account? {
-        accounts.first { $0.linkedLoanId == loan.id }
+        accounts.first { $0.linkedLoanId == loan.id && $0.deletedAt == nil && !$0.isArchived }
     }
 
     private var paymentAccount: Account? {
-        accounts.first { $0.id == loan.paymentAccountId }
+        accounts.first { $0.id == loan.paymentAccountId && $0.deletedAt == nil && !$0.isArchived }
     }
 
     var body: some View {
@@ -121,6 +122,14 @@ struct LoanDetailView: View {
             prepaySheet
                 .presentationDetents([.medium, .large])
         }
+        .alert("暂时无法记账", isPresented: Binding(
+            get: { actionError != nil },
+            set: { if !$0 { actionError = nil } }
+        )) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(actionError ?? "请检查账户设置。")
+        }
     }
 
     private var header: some View {
@@ -150,6 +159,15 @@ struct LoanDetailView: View {
     // MARK: - 记还款
 
     private func repay(_ item: LoanScheduleItem) {
+        guard !item.isPaid else { return }
+        guard paymentAccount != nil else {
+            actionError = "扣款账户已删除或归档，请先在账户管理中恢复。"
+            return
+        }
+        if item.principalMinor > 0, liabilityAccount == nil {
+            actionError = "贷款关联的负债账户不存在，未生成任何流水，请先检查账户数据。"
+            return
+        }
         let bookId = loan.bookId
 
         // 本金：转账（扣款账户 → 贷款负债账户），不进支出
@@ -251,6 +269,11 @@ struct LoanDetailView: View {
                     Text("当前剩余本金 \(Money.format(loan.outstandingPrincipalMinor))")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                    if prepayMinor > loan.outstandingPrincipalMinor {
+                        Text("还款金额不能超过剩余本金")
+                            .font(.caption2)
+                            .foregroundStyle(Theme.danger)
+                    }
                 }
                 Section("处理方式") {
                     Picker("方式", selection: $strategy) {
@@ -276,14 +299,18 @@ struct LoanDetailView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("确认") { prepay() }
-                        .disabled(prepayMinor <= 0)
+                        .disabled(prepayMinor <= 0 || prepayMinor > loan.outstandingPrincipalMinor)
                 }
             }
         }
     }
 
     private func prepay() {
-        guard prepayMinor > 0, let next = nextItem else { return }
+        guard prepayMinor > 0, prepayMinor <= loan.outstandingPrincipalMinor, let next = nextItem else { return }
+        guard paymentAccount != nil, liabilityAccount != nil else {
+            actionError = "扣款账户或贷款负债账户不可用，未生成任何流水。"
+            return
+        }
 
         // 先快照未还期次，再删除，否则重排时拿不到原始数据
         let upcomingSnapshot = unpaidItems.map {

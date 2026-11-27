@@ -57,7 +57,7 @@ enum ClaimReportBuilder {
         let submittedMinor = monthClaims
             .filter { $0.submittedAt != nil || $0.status != .draft }
             .reduce(Int64(0)) { partial, claim in
-                partial + liveTxns.filter { $0.claimId == claim.id && $0.type == .expense }
+                partial + liveTxns.filter { $0.claimId == claim.id && $0.type == .expense && $0.isReimbursable }
                     .reduce(Int64(0)) { $0 + $1.amountMinor }
             }
         let receivedMinor = monthClaims.compactMap { $0.receivedAmountMinor }.reduce(Int64(0), +)
@@ -66,7 +66,7 @@ enum ClaimReportBuilder {
         let outstandingMinor = liveClaims
             .filter { $0.status == .draft || $0.status == .submitted }
             .reduce(Int64(0)) { partial, claim in
-                let total = liveTxns.filter { $0.claimId == claim.id && $0.type == .expense }
+                let total = liveTxns.filter { $0.claimId == claim.id && $0.type == .expense && $0.isReimbursable }
                     .reduce(Int64(0)) { $0 + $1.amountMinor }
                 let received = claim.receivedAmountMinor ?? 0
                 return partial + max(0, total - received)
@@ -93,7 +93,7 @@ enum ClaimReportBuilder {
         // 明细
         let claimSummaries: [ClaimReportClaim] = monthClaims
             .map { claim in
-                let items = liveTxns.filter { $0.claimId == claim.id && $0.type == .expense }
+                let items = liveTxns.filter { $0.claimId == claim.id && $0.type == .expense && $0.isReimbursable }
                 return ClaimReportClaim(
                     id: claim.id,
                     title: claim.title,

@@ -21,10 +21,12 @@ struct ClaimListView: View {
     }
 
     private var monthPendingMinor: Int64 {
-        let interval = AppCalendar.monthInterval(containing: Date())
-        return liveTxns
-            .filter { $0.type == .expense && $0.isReimbursable && interval.contains($0.occurredAt) }
-            .reduce(Int64(0)) { $0 + $1.amountMinor }
+        StatsEngine.summary(
+            range: AppCalendar.monthInterval(containing: Date()),
+            caliber: .personal,
+            txns: liveTxns,
+            claims: liveClaims
+        ).pendingMinor
     }
 
     var body: some View {
@@ -83,7 +85,7 @@ struct ClaimListView: View {
 
     private var summaryCard: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Text("本月垫付")
+            Text("本月待报销")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text(Money.format(monthPendingMinor))
@@ -97,7 +99,7 @@ struct ClaimListView: View {
     }
 
     private func claimRow(_ claim: Claim) -> some View {
-        let items = liveTxns.filter { $0.claimId == claim.id && $0.type == .expense }
+        let items = liveTxns.filter { $0.claimId == claim.id && $0.type == .expense && $0.isReimbursable }
         let total = items.reduce(Int64(0)) { $0 + $1.amountMinor }
         return VStack(alignment: .leading, spacing: 4) {
             HStack {

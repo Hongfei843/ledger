@@ -35,11 +35,13 @@ struct AssetsHomeView: View {
         return map
     }
 
-    private var assetTotalMinor: Int64 {
-        liveAccounts
-            .filter { !$0.type.isLiability }
-            .reduce(Int64(0)) { $0 + max(0, balances[$1.id] ?? 0) }
+    private var netWorthTotals: NetWorthTotals {
+        BalanceService.totals(accounts: accounts, transactions: allTxns, bookId: BookScope.currentId)
     }
+
+    private var assetTotalMinor: Int64 { netWorthTotals.assetsMinor }
+    private var liabilityTotalMinor: Int64 { netWorthTotals.liabilitiesMinor }
+    private var displayAccounts: [Account] { liveAccounts.filter { !$0.isSystem } }
 
     private var creditDebtMinor: Int64 {
         liveAccounts.filter { $0.type.isCreditLike }.reduce(Int64(0)) { partial, account in
@@ -62,7 +64,7 @@ struct AssetsHomeView: View {
     }
 
     private var netWorthMinor: Int64 {
-        BalanceService.netWorth(accounts: liveAccounts, transactions: liveTxns)
+        netWorthTotals.netWorthMinor
     }
 
     private var portfolio: InvestmentPortfolio {
@@ -116,7 +118,7 @@ struct AssetsHomeView: View {
 
             HStack(spacing: Theme.Spacing.m) {
                 miniStat(title: "总资产", value: Money.format(assetTotalMinor), color: .primary)
-                miniStat(title: "总负债", value: Money.format(creditDebtMinor + loanOutstandingMinor), color: Theme.danger)
+                miniStat(title: "总负债", value: Money.format(liabilityTotalMinor), color: Theme.danger)
             }
             HStack(spacing: Theme.Spacing.m) {
                 miniStat(title: "投资市值", value: Money.format(portfolio.valueMinor), color: .primary)
@@ -129,6 +131,11 @@ struct AssetsHomeView: View {
                 } else {
                     miniStat(title: "投资盈亏", value: "未填成本", color: .secondary)
                 }
+            }
+            if loanOutstandingMinor > 0 {
+                Text("贷款按计划单列 \(Money.format(loanOutstandingMinor))，不重复计入净资产")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,12 +215,12 @@ struct AssetsHomeView: View {
                 NavigationLink("管理") { AccountsView() }
                     .font(.caption)
             }
-            if liveAccounts.isEmpty {
+            if displayAccounts.isEmpty {
                 Text("还没有账户")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            ForEach(liveAccounts, id: \.id) { account in
+            ForEach(displayAccounts, id: \.id) { account in
                 NavigationLink {
                     AccountDetailView(account: account)
                 } label: {
@@ -244,7 +251,7 @@ struct AssetsHomeView: View {
                     .lineLimit(1)
             }
             Spacer()
-            Text(Money.format(balances[account.id] ?? 0))
+            Text(Money.format(BalanceService.displayBalance(balances[account.id] ?? 0, accountType: account.type)))
                 .font(.subheadline)
                 .monospacedDigit()
                 .foregroundStyle((balances[account.id] ?? 0) < 0 ? Theme.danger : .primary)
@@ -273,7 +280,7 @@ struct AssetsHomeView: View {
            position.costMinor > 0 {
             return "成本 \(Money.format(position.costMinor)) · 盈亏 \(Money.format(position.profitMinor ?? 0, showSign: true))"
         }
-        return account.type.displayName
+        return account.includeInNetWorth ? account.type.displayName : "\(account.type.displayName) · 不计净资产"
     }
 
     // MARK: - 负债

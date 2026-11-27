@@ -6,19 +6,32 @@ struct CategoryTxnListView: View {
     let categoryId: UUID
     let range: DateInterval
     let title: String
+    let caliber: StatsCaliber
 
     @Query(sort: \Txn.occurredAt, order: .reverse) private var allTxns: [Txn]
     @Query private var accounts: [Account]
     @Query private var categories: [Category]
+    @Query private var claims: [Claim]
+
+    private var openClaims: Set<UUID> { StatsEngine.openClaimIds(claims: claims) }
+    private var claimsById: [UUID: Claim] { Dictionary(uniqueKeysWithValues: claims.map { ($0.id, $0) }) }
 
     private var items: [Txn] {
-        allTxns.filter {
-            $0.deletedAt == nil && $0.categoryId == categoryId && range.contains($0.occurredAt)
+        allTxns.filter { txn in
+            guard txn.deletedAt == nil, txn.categoryId == categoryId, range.contains(txn.occurredAt) else { return false }
+            return StatsEngine.includesExpense(txn, caliber: caliber, openClaims: openClaims, claimsById: claimsById)
+                || StatsEngine.includesRefund(txn, caliber: caliber, allTxns: allTxns, openClaims: openClaims, claimsById: claimsById)
         }
     }
 
+    private var expenseItems: [Txn] {
+        items.filter { StatsEngine.includesExpense($0, caliber: caliber, openClaims: openClaims, claimsById: claimsById) }
+    }
+
     private var totalMinor: Int64 {
-        items.filter { $0.type == .expense }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let gross = expenseItems.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let refunds = items.filter { RefundService.isRefund($0) }.reduce(Int64(0)) { $0 + $1.amountMinor }
+        return max(0, gross - refunds)
     }
 
     var body: some View {
@@ -34,13 +47,13 @@ struct CategoryTxnListView: View {
                 HStack {
                     Text("笔数").foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(items.count)")
+                    Text("\(expenseItems.count)")
                 }
-                if items.count > 1 {
+                if expenseItems.count > 1 {
                     HStack {
                         Text("单笔均值").foregroundStyle(.secondary)
                         Spacer()
-                        Text(Money.format(totalMinor / Int64(items.count)))
+                        Text(Money.format(totalMinor / Int64(expenseItems.count)))
                             .monospacedDigit()
                     }
                 }
@@ -64,9 +77,10 @@ struct CategoryTxnListView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text(Money.format(txn.amountMinor))
+                            Text((RefundService.isRefund(txn) ? "-" : "") + Money.format(txn.amountMinor))
                                 .font(.subheadline)
                                 .monospacedDigit()
+                                .foregroundStyle(RefundService.isRefund(txn) ? Theme.income : .primary)
                         }
                     }
                 }

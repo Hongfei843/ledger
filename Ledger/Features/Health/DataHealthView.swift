@@ -24,13 +24,17 @@ struct DataHealthView: View {
         enum Route { case reconciliation, reimbursement, accounts, categories, duplicates }
     }
 
+    private var classifiableTxns: [Txn] {
+        liveTxns.filter { $0.type.countsAsCashFlow }
+    }
+
     private var uncategorized: [Txn] {
-        liveTxns.filter { $0.categoryId == nil }
+        classifiableTxns.filter { $0.categoryId == nil }
     }
 
     private var unclassifiedRatio: Double {
-        guard !liveTxns.isEmpty else { return 0 }
-        return Double(uncategorized.count) / Double(liveTxns.count)
+        guard !classifiableTxns.isEmpty else { return 0 }
+        return Double(uncategorized.count) / Double(classifiableTxns.count)
     }
 
     private var staleAccounts: [Account] {
@@ -56,9 +60,9 @@ struct DataHealthView: View {
     }
 
     private var withoutNoteRatio: Double {
-        guard !liveTxns.isEmpty else { return 0 }
-        let empty = liveTxns.filter { ($0.note ?? "").isEmpty }.count
-        return Double(empty) / Double(liveTxns.count)
+        guard !classifiableTxns.isEmpty else { return 0 }
+        let empty = classifiableTxns.filter { ($0.note ?? "").isEmpty }.count
+        return Double(empty) / Double(classifiableTxns.count)
     }
 
     /// 疑似重复：同一天 + 同金额 + 同账户 + 同备注
@@ -66,7 +70,7 @@ struct DataHealthView: View {
         var buckets: [String: [Txn]] = [:]
         for txn in liveTxns {
             let day = AppCalendar.startOfDay(txn.occurredAt).timeIntervalSince1970
-            let key = "\(Int(day))|\(txn.amountMinor)|\(txn.accountId.uuidString)|\(txn.note ?? "")"
+            let key = "\(Int(day))|\(txn.typeRaw)|\(txn.amountMinor)|\(txn.accountId.uuidString)|\(txn.counterAccountId?.uuidString ?? "")|\(txn.note ?? "")"
             buckets[key, default: []].append(txn)
         }
         return buckets.values.filter { $0.count > 1 }

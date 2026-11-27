@@ -57,3 +57,57 @@ final class Claim {
         set { statusRaw = newValue.rawValue }
     }
 }
+
+/// 报销到账的唯一写入入口：到账收入与少报差额必须同事务生成，避免各页面口径漂移。
+enum ReimbursementSettlementService {
+    @MainActor
+    @discardableResult
+    static func receive(
+        claim: Claim,
+        totalMinor: Int64,
+        amountMinor: Int64,
+        accountId: UUID,
+        shortfallCategoryId: UUID?,
+        at date: Date = Date(),
+        context: ModelContext
+    ) -> Txn? {
+        guard amountMinor > 0, claim.status == .draft || claim.status == .submitted else { return nil }
+
+        let income = Txn(
+            bookId: claim.bookId,
+            type: .income,
+            amountMinor: amountMinor,
+            accountId: accountId,
+            occurredAt: date,
+            payee: "报销到账",
+            note: claim.title
+        )
+        income.claimId = claim.id
+        context.insert(income)
+
+        let shortfall = max(0, totalMinor - amountMinor)
+        if shortfall > 0 {
+            let shortfallTxn = Txn(
+                bookId: claim.bookId,
+                type: .expense,
+                amountMinor: shortfall,
+                accountId: accountId,
+                occurredAt: date,
+                categoryId: shortfallCategoryId,
+                payee: "报销差额",
+                note: "报销差额 · \(claim.title)",
+                source: .reimbursement
+            )
+            shortfallTxn.claimId = claim.id
+            context.insert(shortfallTxn)
+        }
+
+        claim.status = .reimbursed
+        claim.reimbursedAt = date
+        claim.receivedAmountMinor = amountMinor
+        claim.receivedAccountId = accountId
+        claim.shortfallMinor = shortfall
+        claim.updatedAt = date
+        return income
+    }
+}

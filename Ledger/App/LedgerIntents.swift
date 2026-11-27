@@ -77,7 +77,11 @@ struct MonthlySpendingIntent: AppIntent {
             return .result(dialog: "轻账的数据还没准备好。")
         }
         let context = ModelContext(container)
-        let txns = ((try? context.fetch(FetchDescriptor<Txn>())) ?? []).filter { $0.deletedAt == nil }
+        let books = (try? context.fetch(FetchDescriptor<Book>())) ?? []
+        let currentBookId = BookScope.currentId ?? books.first(where: { $0.isDefault })?.id ?? books.first?.id
+        let txns = ((try? context.fetch(FetchDescriptor<Txn>())) ?? []).filter {
+            $0.deletedAt == nil && (currentBookId == nil || $0.bookId == currentBookId)
+        }
         let claims = (try? context.fetch(FetchDescriptor<Claim>())) ?? []
         let summary = StatsEngine.summary(
             range: AppCalendar.monthInterval(containing: Date()),

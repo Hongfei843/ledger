@@ -67,9 +67,10 @@ enum SeedData {
 
         let storedVersion = UserDefaults.standard.integer(forKey: versionKey)
         guard storedVersion < currentVersion else { return }
-        guard let book = books.first else { return }
 
-        topUpCategories(context: context, bookId: book.id)
+        for book in books where book.deletedAt == nil {
+            topUpCategories(context: context, bookId: book.id)
+        }
         UserDefaults.standard.set(currentVersion, forKey: versionKey)
     }
 
@@ -113,15 +114,27 @@ enum SeedData {
         }
     }
 
+    /// 新建账本后立即补齐默认分类，不让用户面对无法分类的空白记账页。
+    static func seedCategoriesIfNeeded(context: ModelContext, bookId: UUID) {
+        topUpCategories(context: context, bookId: bookId)
+    }
+
     /// 老用户升级：只补缺失的分类，不覆盖已有名称与排序偏好。
     private static func topUpCategories(context: ModelContext, bookId: UUID) {
-        let existing = (try? context.fetch(FetchDescriptor<Category>())) ?? []
+        let existing = ((try? context.fetch(FetchDescriptor<Category>())) ?? []).filter { $0.bookId == bookId }
         let existingExpense = Set(existing.filter { $0.kind == .expense && !$0.isArchived }.map { $0.name })
         let existingIncome = Set(existing.filter { $0.kind == .income && !$0.isArchived }.map { $0.name })
 
         var order = (existing.filter { $0.kind == .expense }.map { $0.sortOrder }.max() ?? 0) + 1
         for seed in expenseCategories where !existingExpense.contains(seed.name) {
-            let category = Category(bookId: bookId, name: seed.name, kind: .expense, iconEmoji: seed.emoji, sortOrder: order)
+            let category = Category(
+                bookId: bookId,
+                name: seed.name,
+                kind: .expense,
+                iconEmoji: seed.emoji,
+                sortOrder: order,
+                defaultReimbursable: seed.name == "交通" || seed.name == "旅行"
+            )
             context.insert(category)
             order += 1
         }

@@ -11,7 +11,7 @@ struct AccountsView: View {
 
     private var activeAccounts: [Account] {
         accounts
-            .filter { $0.deletedAt == nil && !$0.isArchived && BookScope.matches($0.bookId, raw: currentBookRaw) }
+            .filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && BookScope.matches($0.bookId, raw: currentBookRaw) }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 

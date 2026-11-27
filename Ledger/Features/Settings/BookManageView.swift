@@ -109,6 +109,7 @@ struct BookManageView: View {
             isDefault: liveBooks.isEmpty
         )
         context.insert(book)
+        SeedData.seedCategoriesIfNeeded(context: context, bookId: book.id)
         try? context.save()
         BookScope.setCurrent(book.id)
         showNew = false

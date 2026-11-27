@@ -60,19 +60,41 @@ enum StatsEngine {
         return result
     }
 
-    static func includesExpense(_ txn: Txn, caliber: StatsCaliber, openClaims: Set<UUID>) -> Bool {
+    static func includesExpense(
+        _ txn: Txn,
+        caliber: StatsCaliber,
+        openClaims: Set<UUID>,
+        claimsById: [UUID: Claim] = [:]
+    ) -> Bool {
         guard txn.type == .expense else { return false }
+        // 报销到账时补记的差额是个人消费，不是新的现金支出，也不是新的垫付。
+        if txn.source == .reimbursement { return caliber == .personal }
         switch caliber {
         case .cashFlow:
             return true
         case .personal:
-            if txn.isReimbursable, let claimId = txn.claimId, openClaims.contains(claimId) {
+            guard txn.isReimbursable, let claimId = txn.claimId else { return true }
+            // 待报销与已到账的原始垫付都不算个人消费；报不掉而关闭的才重新计入。
+            if openClaims.contains(claimId) || claimsById[claimId]?.status == .reimbursed {
                 return false
             }
             return true
         case .advance:
             return txn.isReimbursable
         }
+    }
+
+    /// 只有原支出本身计入当前口径时，退款才应冲减该口径。
+    static func includesRefund(
+        _ txn: Txn,
+        caliber: StatsCaliber,
+        allTxns: [Txn],
+        openClaims: Set<UUID>,
+        claimsById: [UUID: Claim] = [:]
+    ) -> Bool {
+        guard RefundService.isRefund(txn), let originalId = txn.refundOfTxnId else { return false }
+        guard let original = allTxns.first(where: { $0.id == originalId && $0.deletedAt == nil }) else { return false }
+        return includesExpense(original, caliber: caliber, openClaims: openClaims, claimsById: claimsById)
     }
 
     static func includesIncome(_ txn: Txn, caliber: StatsCaliber) -> Bool {
@@ -96,6 +118,7 @@ enum StatsEngine {
         claims: [Claim]
     ) -> StatsSummary {
         let open = openClaimIds(claims: claims)
+        let claimsById = Dictionary(uniqueKeysWithValues: claims.map { ($0.id, $0) })
         var income: Int64 = 0
         var expense: Int64 = 0
         var refunded: Int64 = 0
@@ -105,10 +128,10 @@ enum StatsEngine {
             if includesIncome(txn, caliber: caliber) {
                 income += txn.amountMinor
             }
-            if includesExpense(txn, caliber: caliber, openClaims: open) {
+            if includesExpense(txn, caliber: caliber, openClaims: open, claimsById: claimsById) {
                 expense += txn.amountMinor
             }
-            if RefundService.isRefund(txn) {
+            if includesRefund(txn, caliber: caliber, allTxns: txns, openClaims: open, claimsById: claimsById) {
                 refunded += txn.amountMinor
             }
             if txn.type == .expense, txn.isReimbursable,
@@ -117,7 +140,21 @@ enum StatsEngine {
             }
         }
 
-        // 退款冲减支出（垫付口径只核对垫付与到账，不做冲减）
+        // 待报销金额也要扣除已经发生的退款，避免把已退回的钱继续算作在途垫付。
+        if caliber == .personal {
+            for txn in txns where txn.deletedAt == nil && RefundService.isRefund(txn) {
+                guard let originalId = txn.refundOfTxnId,
+                      let original = txns.first(where: { $0.id == originalId && $0.deletedAt == nil }),
+                      range.contains(original.occurredAt),
+                      original.isReimbursable,
+                      let claimId = original.claimId,
+                      open.contains(claimId) else { continue }
+                pending -= txn.amountMinor
+            }
+        }
+        pending = max(0, pending)
+
+        // 退款是否冲减取决于原支出是否属于当前口径，跨期退款仍在到账月冲减。
         if caliber != .advance {
             expense = RefundService.netExpense(expenseMinor: expense, refundMinor: refunded)
         }
@@ -133,12 +170,13 @@ enum StatsEngine {
         categories: [Category]
     ) -> [CategorySlice] {
         let open = openClaimIds(claims: claims)
+        let claimsById = Dictionary(uniqueKeysWithValues: claims.map { ($0.id, $0) })
         var totals: [UUID: (amount: Int64, count: Int)] = [:]
         var unknownAmount: Int64 = 0
         var unknownCount = 0
 
         for txn in txns where txn.deletedAt == nil && range.contains(txn.occurredAt) {
-            guard includesExpense(txn, caliber: caliber, openClaims: open) else { continue }
+            guard includesExpense(txn, caliber: caliber, openClaims: open, claimsById: claimsById) else { continue }
             if let categoryId = txn.categoryId {
                 let current = totals[categoryId] ?? (0, 0)
                 totals[categoryId] = (current.amount + txn.amountMinor, current.count + 1)
@@ -150,7 +188,7 @@ enum StatsEngine {
 
         // 退款冲减原分类（退款流水继承了原支出的分类），垫付口径不冲减
         if caliber != .advance {
-            for txn in txns where txn.deletedAt == nil && range.contains(txn.occurredAt) && RefundService.isRefund(txn) {
+            for txn in txns where txn.deletedAt == nil && range.contains(txn.occurredAt) && includesRefund(txn, caliber: caliber, allTxns: txns, openClaims: open, claimsById: claimsById) {
                 if let categoryId = txn.categoryId, let current = totals[categoryId] {
                     totals[categoryId] = (current.amount - txn.amountMinor, current.count)
                 } else {
@@ -190,8 +228,14 @@ enum StatsEngine {
         return slices.sorted { $0.amountMinor > $1.amountMinor }
     }
 
-    /// 最近 N 个月的收支（用于趋势图）；退款同样冲减支出、不计收入
-    static func byMonth(months: Int, endingAt: Date, txns: [Txn]) -> [MonthBucket] {
+    /// 最近 N 个月的收支趋势，与当前统计页选择的口径保持一致。
+    static func byMonth(
+        months: Int,
+        endingAt: Date,
+        txns: [Txn],
+        claims: [Claim] = [],
+        caliber: StatsCaliber = .cashFlow
+    ) -> [MonthBucket] {
         guard months > 0 else { return [] }
         var buckets: [MonthBucket] = []
         let calendar = AppCalendar.gregorian
@@ -199,24 +243,18 @@ enum StatsEngine {
 
         for offset in stride(from: months - 1, through: 0, by: -1) {
             guard let monthStart = calendar.date(byAdding: .month, value: -offset, to: anchor) else { continue }
-            let interval = AppCalendar.monthInterval(containing: monthStart)
-            var income: Int64 = 0
-            var expense: Int64 = 0
-            var refunded: Int64 = 0
-
-            for txn in txns where txn.deletedAt == nil && interval.contains(txn.occurredAt) {
-                if txn.type == .income && !RefundService.isRefund(txn) { income += txn.amountMinor }
-                if txn.type == .expense { expense += txn.amountMinor }
-                if RefundService.isRefund(txn) { refunded += txn.amountMinor }
-            }
-            expense = RefundService.netExpense(expenseMinor: expense, refundMinor: refunded)
-
+            let summary = summary(
+                range: AppCalendar.monthInterval(containing: monthStart),
+                caliber: caliber,
+                txns: txns,
+                claims: claims
+            )
             buckets.append(
                 MonthBucket(
                     id: AppCalendar.monthKey(monthStart),
                     monthStart: monthStart,
-                    incomeMinor: income,
-                    expenseMinor: expense
+                    incomeMinor: summary.incomeMinor,
+                    expenseMinor: summary.expenseMinor
                 )
             )
         }

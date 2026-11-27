@@ -33,7 +33,7 @@ enum CreditCardBillService {
         for txn in txns where txn.deletedAt == nil
             && txn.accountId == account.id
             && period.contains(txn.occurredAt) {
-            if txn.type == .expense {
+            if txn.type == .expense && txn.source != .reimbursement {
                 expense += txn.amountMinor
             } else if RefundService.isRefund(txn) {
                 refund += txn.amountMinor

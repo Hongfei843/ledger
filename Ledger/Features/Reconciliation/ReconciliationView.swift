@@ -7,6 +7,7 @@ struct ReconciliationView: View {
     @Environment(\.modelContext) private var context
     @Query private var accounts: [Account]
     @Query private var allTxns: [Txn]
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
 
     @State private var inputs: [UUID: String] = [:]
     @State private var message: String?
@@ -15,16 +16,23 @@ struct ReconciliationView: View {
 
     private var liveAccounts: [Account] {
         accounts
-            .filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+            .filter {
+                $0.deletedAt == nil && !$0.isArchived && !$0.isSystem
+                    && BookScope.matches($0.bookId, raw: currentBookRaw)
+            }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private var liveTxns: [Txn] {
-        allTxns.filter { $0.deletedAt == nil }
+        allTxns.filter { $0.deletedAt == nil && BookScope.matches($0.bookId, raw: currentBookRaw) }
     }
 
     private var assets: [Account] { liveAccounts.filter { !$0.type.isLiability } }
     private var liabilities: [Account] { liveAccounts.filter { $0.type.isLiability } }
+
+    private var recentRuns: [ReconciliationRun] {
+        runs.filter { BookScope.matches($0.bookId, raw: currentBookRaw) }
+    }
 
     private var pendingCount: Int {
         liveAccounts.filter { account in
@@ -82,9 +90,9 @@ struct ReconciliationView: View {
                 }
             }
 
-            if !runs.isEmpty {
+            if !recentRuns.isEmpty {
                 Section {
-                    ForEach(runs.prefix(5), id: \.id) { run in
+                    ForEach(recentRuns.prefix(5), id: \.id) { run in
                         HStack {
                             Text(DateFormatter.ledgerDateTime.string(from: run.createdAt))
                                 .font(.subheadline)
@@ -128,30 +136,32 @@ struct ReconciliationView: View {
             transactions: liveTxns,
             openingBalanceMinor: account.openingBalanceMinor
         )
-        let actual = inputs[account.id].flatMap { Money.parse($0) }
+        let actualInput = inputs[account.id].flatMap { Money.parse($0) }
+        let actual = actualInput.map { BalanceService.signedBalance(fromActualInput: $0, accountType: account.type) }
         let delta = actual.map { $0 - current }
+        let displayDelta = delta.map { BalanceService.displayBalance($0, accountType: account.type) }
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(account.iconEmoji)
                 Text(account.name).font(.subheadline)
                 Spacer()
-                Text(Money.format(current))
+                Text(Money.format(BalanceService.displayBalance(current, accountType: account.type)))
                     .font(.subheadline)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: Theme.Spacing.s) {
-                TextField("实际余额", text: binding(for: account.id))
+                TextField(account.type.isLiability ? "实际欠款" : "实际余额", text: binding(for: account.id))
                     .keyboardType(.numbersAndPunctuation)
                     .textFieldStyle(.roundedBorder)
                     .font(.subheadline)
 
-                if let delta {
-                    Text(delta == 0 ? "一致" : Money.format(delta, showSign: true))
+                if let displayDelta {
+                    Text(displayDelta == 0 ? "一致" : Money.format(displayDelta, showSign: true))
                         .font(.caption)
                         .monospacedDigit()
-                        .foregroundStyle(delta == 0 ? Theme.income : Theme.warning)
+                        .foregroundStyle(displayDelta == 0 ? Theme.income : Theme.warning)
                         .frame(width: 90, alignment: .trailing)
                 }
             }
@@ -163,8 +173,10 @@ struct ReconciliationView: View {
     }
 
     private func reconcileHint(_ account: Account) -> String {
-        guard let last = account.lastReconciledAt else { return "从未对账" }
-        return "上次对账 \(DateFormatter.ledgerShort.string(from: last))"
+        let base = account.lastReconciledAt.map {
+            "上次对账 \(DateFormatter.ledgerShort.string(from: $0))"
+        } ?? "从未对账"
+        return account.type.isLiability ? "\(base) · 填全部欠款，溢缴填负数" : base
     }
 
     private func binding(for id: UUID) -> Binding<String> {
@@ -181,7 +193,8 @@ struct ReconciliationView: View {
         let now = Date()
 
         for account in liveAccounts {
-            guard let text = inputs[account.id], let actual = Money.parse(text) else { continue }
+            guard let text = inputs[account.id], let actualInput = Money.parse(text) else { continue }
+            let actual = BalanceService.signedBalance(fromActualInput: actualInput, accountType: account.type)
             checkedCount += 1
             let current = BalanceService.balance(
                 of: account,
@@ -224,7 +237,7 @@ struct ReconciliationView: View {
         try? context.save()
 
         inputs = [:]
-        message = adjusted == 0 ? "账面与实际全部一致 👍" : "已校准 \(adjusted) 个账户"
+        message = adjusted == 0 ? "账面与实际全部一致，对账时间已更新" : "已校准 \(adjusted) 个账户"
         Haptics.success()
     }
 }

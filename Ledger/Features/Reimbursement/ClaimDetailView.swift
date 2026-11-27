@@ -12,9 +12,10 @@ struct ClaimDetailView: View {
     @State private var showReceive = false
     @State private var receiveText = ""
     @State private var receiveAccountId: UUID?
+    @State private var saveError: String?
 
     private var items: [Txn] {
-        allTxns.filter { $0.deletedAt == nil && $0.claimId == claim.id && $0.type == .expense }
+        allTxns.filter { $0.deletedAt == nil && $0.claimId == claim.id && $0.type == .expense && $0.isReimbursable }
     }
 
     private var totalMinor: Int64 {
@@ -140,6 +141,14 @@ struct ClaimDetailView: View {
             receiveSheet
                 .presentationDetents([.medium])
         }
+        .alert("保存失败", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } }
+        )) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(saveError ?? "请稍后重试。")
+        }
     }
 
     private var receiveSheet: some View {
@@ -166,7 +175,7 @@ struct ClaimDetailView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("确认") { receive() }
-                        .disabled(receiveAccountId == nil)
+                        .disabled(receiveAccountId == nil || (Money.parse(receiveText) ?? 0) <= 0)
                 }
             }
         }
@@ -189,34 +198,28 @@ struct ClaimDetailView: View {
 
     private func receive() {
         guard let accountId = receiveAccountId,
-              let amount = Money.parse(receiveText) else { return }
+              let amount = Money.parse(receiveText), amount > 0 else { return }
 
-        let categoryId = categories.first { $0.name == "报销收入" && $0.kind == .income }?.id
-        let income = Txn(
-            bookId: claim.bookId,
-            type: .income,
+        let income = ReimbursementSettlementService.receive(
+            claim: claim,
+            totalMinor: totalMinor,
             amountMinor: amount,
             accountId: accountId,
-            categoryId: categoryId,
-            note: "报销到账 · \(claim.title)"
+            shortfallCategoryId: categories.first { $0.name == "报销差额" && $0.kind == .expense }?.id,
+            context: context
         )
-        income.claimId = claim.id
-        context.insert(income)
+        income?.categoryId = categories.first { $0.name == "报销收入" && $0.kind == .income }?.id
+        guard income != nil else { return }
 
-        claim.status = .reimbursed
-        claim.reimbursedAt = Date()
-        claim.receivedAmountMinor = amount
-        claim.receivedAccountId = accountId
-        claim.shortfallMinor = max(0, totalMinor - amount)
-        claim.updatedAt = Date()
-
-        try? context.save()
-
-        let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
-        BalanceService.refreshAll(accounts: accounts, transactions: all)
-        try? context.save()
-
-        Haptics.success()
-        showReceive = false
+        do {
+            try context.save()
+            let all = try context.fetch(FetchDescriptor<Txn>())
+            BalanceService.refreshAll(accounts: accounts, transactions: all)
+            try context.save()
+            Haptics.success()
+            showReceive = false
+        } catch {
+            saveError = error.localizedDescription
+        }
     }
 }

@@ -24,6 +24,16 @@ enum RecurringService {
         var touchedAccounts = Set<UUID>()
 
         for rule in active {
+            guard rule.amountMinor > 0,
+                  let sourceAccount = accounts.first(where: {
+                      $0.id == rule.accountId && $0.deletedAt == nil && !$0.isArchived && $0.bookId == rule.bookId
+                  }) else { continue }
+            if rule.templateType == .transfer {
+                guard let targetId = rule.counterAccountId, targetId != sourceAccount.id,
+                      accounts.contains(where: {
+                          $0.id == targetId && $0.deletedAt == nil && !$0.isArchived && $0.bookId == rule.bookId
+                      }) else { continue }
+            }
             let dates = RecurringEngine.dueDates(rule: rule, upTo: today)
             guard !dates.isEmpty else { continue }
 

@@ -7,13 +7,14 @@ struct QuickTemplateListView: View {
     @Query private var templates: [QuickTemplate]
     @Query private var accounts: [Account]
     @Query private var categories: [Category]
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
 
     @State private var editing: QuickTemplate?
     @State private var showAdd = false
 
     private var live: [QuickTemplate] {
         templates
-            .filter { $0.deletedAt == nil }
+            .filter { $0.deletedAt == nil && BookScope.matches($0.bookId, raw: currentBookRaw) }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
@@ -130,21 +131,33 @@ struct QuickTemplateEditView: View {
         _note = State(initialValue: template?.note ?? "")
     }
 
+    private var targetBookId: UUID? {
+        template?.bookId ?? BookScope.currentId ?? books.first?.id
+    }
+
     private var activeAccounts: [Account] {
         accounts
-            .filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+            .filter {
+                $0.deletedAt == nil && !$0.isArchived && !$0.isSystem
+                    && ($0.bookId == targetBookId)
+            }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private var selectableCategories: [Category] {
         let kind: CategoryKind = type == .income ? .income : .expense
         return categories
-            .filter { $0.deletedAt == nil && !$0.isArchived && $0.kind == kind }
+            .filter {
+                $0.deletedAt == nil && !$0.isArchived && $0.kind == kind
+                    && ($0.bookId == targetBookId)
+            }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        if amountText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        return (Money.parse(amountText) ?? 0) > 0
     }
 
     var body: some View {
@@ -160,10 +173,8 @@ struct QuickTemplateEditView: View {
                         Text("收入").tag(TxnType.income)
                         Text("转账").tag(TxnType.transfer)
                     }
-                    if type != .transfer {
-                        TextField("金额（可选，元）", text: $amountText)
-                            .keyboardType(.decimalPad)
-                    }
+                    TextField("金额（可选，元）", text: $amountText)
+                        .keyboardType(.decimalPad)
                     Picker("账户", selection: $accountId) {
                         Text("不指定").tag(UUID?.none)
                         ForEach(activeAccounts, id: \.id) { account in

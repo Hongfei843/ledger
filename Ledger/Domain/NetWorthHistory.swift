@@ -46,14 +46,10 @@ enum NetWorthHistory {
                 && account.includeInNetWorth
                 && account.type != .loan {
                 let balance = balance(of: account, transactions: liveTxns, before: cutoff)
-                if account.type.isLiability {
-                    if balance < 0 {
-                        liabilities += -balance
-                    } else {
-                        assets += balance
-                    }
-                } else {
+                if balance >= 0 {
                     assets += balance
+                } else {
+                    liabilities += -balance
                 }
             }
 

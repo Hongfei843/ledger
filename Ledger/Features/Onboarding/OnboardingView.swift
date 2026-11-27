@@ -16,6 +16,7 @@ struct OnboardingView: View {
     @State private var dueDay = 25
     @State private var didCreate = false
     @State private var showAddAccount = false
+    @State private var balanceInputs: [UUID: String] = [:]
 
     private struct Preset: Identifiable {
         let id: String
@@ -136,7 +137,7 @@ struct OnboardingView: View {
                             .textFieldStyle(.roundedBorder)
                     }
                     HStack {
-                        Text("期初余额")
+                        Text(account.type.isLiability ? "当前欠款" : "期初余额")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         TextField("0.00", text: balanceBinding(account))
@@ -155,6 +156,7 @@ struct OnboardingView: View {
                     .font(.subheadline)
             }
         }
+        .onAppear(perform: initializeBalanceInputs)
     }
 
     private var setupAccounts: [Account] {
@@ -176,15 +178,32 @@ struct OnboardingView: View {
 
     private func balanceBinding(_ account: Account) -> Binding<String> {
         Binding(
-            get: { Money.rawText(account.openingBalanceMinor) },
-            set: { text in
-                guard let value = Money.parse(text) else { return }
-                account.openingBalanceMinor = value
-                account.cachedBalanceMinor = value
-                account.updatedAt = Date()
-                try? context.save()
-            }
+            get: {
+                balanceInputs[account.id]
+                    ?? Money.rawText(BalanceService.displayBalance(account.openingBalanceMinor, accountType: account.type))
+            },
+            set: { balanceInputs[account.id] = $0 }
         )
+    }
+
+    private func initializeBalanceInputs() {
+        for account in setupAccounts where balanceInputs[account.id] == nil {
+            balanceInputs[account.id] = Money.rawText(
+                BalanceService.displayBalance(account.openingBalanceMinor, accountType: account.type)
+            )
+        }
+    }
+
+    private func persistBalances() {
+        initializeBalanceInputs()
+        for account in setupAccounts {
+            guard let text = balanceInputs[account.id], let input = Money.parse(text) else { continue }
+            let signed = BalanceService.signedBalance(fromActualInput: input, accountType: account.type)
+            account.openingBalanceMinor = signed
+            account.cachedBalanceMinor = signed
+            account.updatedAt = Date()
+        }
+        try? context.save()
     }
 
     private var creditSettings: some View {
@@ -279,6 +298,9 @@ struct OnboardingView: View {
         if step == 1 {
             createAccounts()
         }
+        if step == 2 {
+            persistBalances()
+        }
         if step == 4 {
             finishOnboarding()
             return
@@ -310,6 +332,7 @@ struct OnboardingView: View {
     }
 
     private func finishOnboarding() {
+        persistBalances()
         for account in creditAccounts {
             account.billDay = billDay
             account.dueDay = dueDay
