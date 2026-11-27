@@ -105,56 +105,58 @@ struct AssetsHomeView: View {
     // MARK: - 净值
 
     private var netWorthCard: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Text("净资产")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(Money.format(netWorthMinor))
-                .font(Theme.Fonts.amountL)
-                .monospacedDigit()
-                .foregroundStyle(netWorthMinor < 0 ? Theme.danger : .primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.55)
-
-            HStack(spacing: Theme.Spacing.m) {
-                miniStat(title: "总资产", value: Money.format(assetTotalMinor), color: .primary)
-                miniStat(title: "总负债", value: Money.format(liabilityTotalMinor), color: Theme.danger)
-            }
-            HStack(spacing: Theme.Spacing.m) {
-                miniStat(title: "投资市值", value: Money.format(portfolio.valueMinor), color: .primary)
-                if let profit = portfolio.profitMinor {
-                    miniStat(
-                        title: "投资盈亏",
-                        value: Money.format(profit, showSign: true),
-                        color: profit >= 0 ? Theme.income : Theme.danger
-                    )
-                } else {
-                    miniStat(title: "投资盈亏", value: "未填成本", color: .secondary)
-                }
-            }
-            if loanOutstandingMinor > 0 {
-                Text("贷款按计划单列 \(Money.format(loanOutstandingMinor))，不重复计入净资产")
+        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            HStack {
+                Label("净资产", systemImage: "sparkles")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text("资产 − 负债")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.white.opacity(0.76))
+
+            Text(Money.format(netWorthMinor))
+                .font(Theme.Fonts.amountXL)
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.52)
+
+            HStack(spacing: Theme.Spacing.xl) {
+                heroStat(title: "总资产", value: Money.format(assetTotalMinor))
+                heroStat(title: "总负债", value: Money.format(liabilityTotalMinor))
+                heroStat(title: "投资市值", value: Money.format(portfolio.valueMinor))
+            }
+
+            if loanOutstandingMinor > 0 {
+                Label("贷款按计划单列 \(Money.format(loanOutstandingMinor))，不重复计入", systemImage: "info.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.72))
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Theme.Spacing.m)
-        .background(
-            Color(.secondarySystemGroupedBackground),
-            in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-        )
+        .padding(Theme.Spacing.xl)
+        .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            Circle()
+                .fill(.white.opacity(0.07))
+                .frame(width: 170, height: 170)
+                .offset(x: 58, y: -74)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: Theme.accent.opacity(0.22), radius: 24, x: 0, y: 12)
     }
 
-    private func miniStat(title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption2).foregroundStyle(.secondary)
+    private func heroStat(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.68))
             Text(value)
-                .font(.caption.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
-                .foregroundStyle(color)
+                .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.55)
+                .minimumScaleFactor(0.58)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -201,8 +203,7 @@ struct AssetsHomeView: View {
                 }
             }
         }
-        .padding(Theme.Spacing.m)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .cardStyle(padding: Theme.Spacing.l)
     }
 
     // MARK: - 账户
@@ -229,8 +230,7 @@ struct AssetsHomeView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(Theme.Spacing.m)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .cardStyle(padding: Theme.Spacing.l)
     }
 
     private func accountRow(_ account: Account) -> some View {
@@ -239,7 +239,7 @@ struct AssetsHomeView: View {
                 bankId: account.bankId,
                 fallbackEmoji: account.iconEmoji,
                 fallbackColorHex: account.colorHex,
-                size: 32
+                size: 42
             )
             VStack(alignment: .leading, spacing: 2) {
                 Text(account.displayName)
@@ -252,7 +252,7 @@ struct AssetsHomeView: View {
             }
             Spacer()
             Text(Money.format(BalanceService.displayBalance(balances[account.id] ?? 0, accountType: account.type)))
-                .font(.subheadline)
+                .font(Theme.Fonts.amountM)
                 .monospacedDigit()
                 .foregroundStyle((balances[account.id] ?? 0) < 0 ? Theme.danger : .primary)
             Image(systemName: "chevron.right")
@@ -329,8 +329,7 @@ struct AssetsHomeView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(Theme.Spacing.m)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .cardStyle(padding: Theme.Spacing.l)
     }
 
     private func liabilityRow(title: String, detail: String, amount: Int64, icon: String) -> some View {
@@ -377,8 +376,7 @@ struct AssetsHomeView: View {
                     .foregroundStyle(.primary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, Theme.Spacing.m)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+            .cardStyle(radius: 18, padding: Theme.Spacing.m)
         }
         .buttonStyle(.plain)
     }

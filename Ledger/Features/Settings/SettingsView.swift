@@ -7,7 +7,7 @@ struct SettingsView: View {
     @Query private var accounts: [Account]
     @Query private var loans: [Loan]
     @Query private var scheduleItems: [LoanScheduleItem]
-    @AppStorage(CategoryIcon.styleKey) private var iconStyle: String = IconStyle.emoji.rawValue
+    @AppStorage(CategoryIcon.styleKey) private var iconStyle: String = IconStyle.symbol.rawValue
     @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
     @AppStorage(NotificationService.enabledKey) private var remindersEnabled = false
     @AppStorage("security.lockEnabled") private var lockEnabled = false
@@ -26,66 +26,64 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    HStack(spacing: Theme.Spacing.l) {
+                        Image(systemName: "banknote.fill")
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 58, height: 58)
+                            .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+                            .shadow(color: Theme.accent.opacity(0.20), radius: 12, y: 5)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("轻账")
+                                .font(.system(size: 25, weight: .bold, design: .rounded))
+                            Text("把每一笔记成确定性")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Label("本机私密", systemImage: "lock.shield")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(Theme.accent)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 6)
+                            .background(Theme.accent.opacity(0.10), in: Capsule())
+                    }
+                    .padding(.vertical, Theme.Spacing.s)
+                    .listRowBackground(Color.clear)
+                }
+
                 Section("记账") {
-                    NavigationLink("账本管理") {
-                        BookManageView()
-                    }
-                    NavigationLink("分类管理") {
-                        CategoryManageView()
-                    }
-                    NavigationLink("常用组合") {
-                        QuickTemplateListView()
-                    }
-                    NavigationLink("周期记账") {
-                        RecurringListView()
-                    }
-                    NavigationLink("截图记账") {
-                        ScreenshotGuideView()
-                    }
-                    NavigationLink("导入账单") {
-                        ImportView()
-                    }
-                    NavigationLink("账单比对") {
-                        BillCompareView()
-                    }
+                    settingsLink("账本管理", systemImage: "books.vertical") { BookManageView() }
+                    settingsLink("分类管理", systemImage: "square.grid.2x2") { CategoryManageView() }
+                    settingsLink("常用组合", systemImage: "bolt") { QuickTemplateListView() }
+                    settingsLink("周期记账", systemImage: "repeat") { RecurringListView() }
+                    settingsLink("截图记账", systemImage: "text.viewfinder") { ScreenshotGuideView() }
+                    settingsLink("导入账单", systemImage: "square.and.arrow.down") { ImportView() }
+                    settingsLink("账单比对", systemImage: "checklist") { BillCompareView() }
                 }
 
                 Section("资产") {
-                    NavigationLink("账户管理") {
-                        AccountsView()
-                    }
-                    NavigationLink("资产总览") {
-                        AssetOverviewView()
-                    }
-                    NavigationLink("资金计划") {
-                        CashFlowPlanView()
-                    }
-                    NavigationLink("对账") {
-                        ReconciliationView()
-                    }
-                    NavigationLink("借入借出") {
-                        DebtListView()
-                    }
+                    settingsLink("账户管理", systemImage: "creditcard") { AccountsView() }
+                    settingsLink("资产总览", systemImage: "chart.line.uptrend.xyaxis") { AssetOverviewView() }
+                    settingsLink("资金计划", systemImage: "calendar") { CashFlowPlanView() }
+                    settingsLink("对账", systemImage: "checkmark.circle") { ReconciliationView() }
+                    settingsLink("借入借出", systemImage: "arrow.left.arrow.right") { DebtListView() }
                 }
 
                 Section("数据") {
-                    LabeledContent("流水条数", value: "\(liveTxns.count)")
-                    LabeledContent("账户数", value: "\(accounts.filter { $0.deletedAt == nil }.count)")
-                    NavigationLink("数据健康") {
-                        DataHealthView()
+                    HStack(spacing: Theme.Spacing.xl) {
+                        settingsMetric(title: "有效流水", value: "\(liveTxns.count)", unit: "笔")
+                        settingsMetric(title: "当前账户", value: "\(accounts.filter { $0.deletedAt == nil }.count)", unit: "个")
                     }
-                    NavigationLink("导出分析包") {
-                        ExportView()
-                    }
-                    NavigationLink("备份与恢复") {
-                        BackupRestoreView()
-                    }
+                    .padding(.vertical, Theme.Spacing.xs)
+                    settingsLink("数据健康", systemImage: "heart.text.square") { DataHealthView() }
+                    settingsLink("导出分析包", systemImage: "square.and.arrow.up") { ExportView() }
+                    settingsLink("备份与恢复", systemImage: "externaldrive") { BackupRestoreView() }
                 }
 
                 Section("维护") {
-                    NavigationLink("初始化数据") {
-                        ResetDataView()
-                    }
+                    settingsLink("初始化数据", systemImage: "arrow.counterclockwise") { ResetDataView() }
                 }
 
                 Section("外观") {
@@ -151,8 +149,45 @@ struct SettingsView: View {
                     LabeledContent("数据存储", value: "仅本机，不上传")
                 }
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Theme.pageBackground)
+            .listSectionSpacing(18)
             .navigationTitle("我的")
+            .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    private func settingsLink<Destination: View>(
+        _ title: String,
+        systemImage: String,
+        @ViewBuilder destination: () -> Destination
+    ) -> some View {
+        NavigationLink(destination: destination) {
+            HStack(spacing: Theme.Spacing.m) {
+                LedgerIconBadge(systemImage: systemImage, size: 34)
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+            }
+            .padding(.vertical, 3)
+        }
+    }
+
+    private func settingsMetric(title: String, value: String, unit: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value)
+                    .font(Theme.Fonts.amountL)
+                    .monospacedDigit()
+                Text(unit)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func themeDot(_ preset: Theme.Preset) -> some View {

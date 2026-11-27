@@ -64,6 +64,10 @@ struct ClaimListView: View {
                     }
                 }
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Theme.pageBackground)
+            .listSectionSpacing(16)
             .navigationTitle("报销")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -84,46 +88,85 @@ struct ClaimListView: View {
     }
 
     private var summaryCard: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Text("本月待报销")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            HStack {
+                Label("本月待报销", systemImage: "doc.text")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text("\(openClaims.count) 单进行中")
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.14), in: Capsule())
+            }
+            .foregroundStyle(.white.opacity(0.80))
+
             Text(Money.format(monthPendingMinor))
-                .font(Theme.Fonts.amountL)
+                .font(Theme.Fonts.amountXL)
                 .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.58)
+
+            HStack {
+                Label("垫付清晰，到账可查", systemImage: "checkmark.seal")
+                Spacer()
+                Text("已完成 \(closedClaims.count) 单")
+            }
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.72))
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Theme.Spacing.l)
-        .background(Theme.cardBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
+        .padding(Theme.Spacing.xl)
+        .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            Circle()
+                .fill(.white.opacity(0.07))
+                .frame(width: 150, height: 150)
+                .offset(x: 54, y: -64)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: Theme.accent.opacity(0.22), radius: 24, x: 0, y: 12)
     }
 
     private func claimRow(_ claim: Claim) -> some View {
         let items = liveTxns.filter { $0.claimId == claim.id && $0.type == .expense && $0.isReimbursable }
         let total = items.reduce(Int64(0)) { $0 + $1.amountMinor }
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(claim.title)
-                    .font(.subheadline.weight(.medium))
-                Spacer()
-                Text(claim.status.displayName)
-                    .font(.caption2)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(badgeColor(claim.status).opacity(0.14), in: Capsule())
-                    .foregroundStyle(badgeColor(claim.status))
-            }
-            HStack {
-                Text("\(items.count) 笔 · \(claim.periodMonth)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(Money.format(total))
-                    .font(.subheadline)
-                    .monospacedDigit()
+        return HStack(spacing: Theme.Spacing.m) {
+            LedgerIconBadge(systemImage: claimIcon(claim.status), tint: badgeColor(claim.status), size: 44)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(claim.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer()
+                    Text(claim.status.displayName)
+                        .font(.caption2.weight(.medium))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(badgeColor(claim.status).opacity(0.12), in: Capsule())
+                        .foregroundStyle(badgeColor(claim.status))
+                }
+                HStack {
+                    Text("\(items.count) 笔 · \(claim.periodMonth)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(Money.format(total))
+                        .font(Theme.Fonts.amountM)
+                        .monospacedDigit()
+                }
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 6)
+    }
+
+    private func claimIcon(_ status: ClaimStatus) -> String {
+        switch status {
+        case .draft: "doc.badge.plus"
+        case .submitted: "paperplane"
+        case .reimbursed: "checkmark.seal"
+        case .closed: "archivebox"
+        }
     }
 
     private func badgeColor(_ status: ClaimStatus) -> Color {

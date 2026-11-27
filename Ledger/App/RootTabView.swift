@@ -2,6 +2,74 @@ import SwiftUI
 import SwiftData
 import Combine
 
+enum LedgerTab: Int, Hashable {
+    case transactions, stats, claims, assets, settings
+
+    var title: String {
+        switch self {
+        case .transactions: "明细"
+        case .stats: "统计"
+        case .claims: "报销"
+        case .assets: "资产"
+        case .settings: "我的"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .transactions: "list.bullet.rectangle"
+        case .stats: "chart.pie"
+        case .claims: "doc.text"
+        case .assets: "building.columns"
+        case .settings: "person"
+        }
+    }
+}
+
+struct LedgerFloatingTabBar: View {
+    @Binding var selection: LedgerTab
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach([LedgerTab.transactions, .stats, .claims, .assets, .settings], id: \.self) { tab in
+                Button {
+                    Haptics.selection()
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        selection = tab
+                    }
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tab.systemImage)
+                            .font(.system(size: 17, weight: selection == tab ? .semibold : .regular))
+                            .frame(height: 20)
+                        Text(tab.title)
+                            .font(.system(size: 10, weight: selection == tab ? .semibold : .medium))
+                    }
+                    .foregroundStyle(selection == tab ? Theme.accent : Color.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        selection == tab ? Theme.accent.opacity(0.11) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 17, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(selection == tab ? .isSelected : [])
+            }
+        }
+        .padding(6)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.055), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.10), radius: 22, x: 0, y: 10)
+        .padding(.horizontal, Theme.Spacing.m)
+        .padding(.bottom, 4)
+    }
+}
+
 struct RootTabView: View {
     @Environment(\.modelContext) private var context
     @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
@@ -14,6 +82,7 @@ struct RootTabView: View {
 
     @State private var showOnboarding = false
     @State private var showQuickEntry = false
+    @State private var selectedTab: LedgerTab = .transactions
 
     /// 从系统「分享到本应用」或「用其他应用打开」传进来的文件
     @State private var sharedFile: SharedFile?
@@ -23,23 +92,27 @@ struct RootTabView: View {
     @State private var importHint: String?
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             TransactionListView()
-                .tabItem { Label("明细", systemImage: "list.bullet") }
+                .tag(LedgerTab.transactions)
 
             StatsView()
-                .tabItem { Label("统计", systemImage: "chart.pie") }
+                .tag(LedgerTab.stats)
 
             ClaimListView()
-                .tabItem { Label("报销", systemImage: "doc.text") }
+                .tag(LedgerTab.claims)
 
             AssetsHomeView()
-                .tabItem { Label("资产", systemImage: "building.columns") }
+                .tag(LedgerTab.assets)
 
             SettingsView()
-                .tabItem { Label("我的", systemImage: "person") }
+                .tag(LedgerTab.settings)
         }
-        .tint(Color(hexString: accentHex))
+        .tint(Theme.accent)
+        .toolbar(.hidden, for: .tabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            LedgerFloatingTabBar(selection: $selectedTab)
+        }
         // 切换主题色时强制重建，让所有引用 Theme.accent 的视图立即生效
         .id(accentHex)
         .onOpenURL { url in

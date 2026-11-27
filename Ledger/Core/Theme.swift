@@ -5,7 +5,7 @@ import UIKit
 enum Theme {
     /// 强调色存储键（UserDefaults / AppStorage 共用）
     static let accentHexKey = "ui.accentHex"
-    static let defaultAccentHex = "5B7C99"
+    static let defaultAccentHex = "526B60"
 
     /// 当前强调色（跟随设置；深色模式下自动提亮，保证在深色背景上可读）
     static var accentHex: String {
@@ -26,9 +26,19 @@ enum Theme {
     static let danger = Color(light: 0xDC2626, dark: 0xFF6B6B)
     static let transfer = Color.secondary
 
-    // 背景：使用系统动态色，自动跟随深色模式
-    static let pageBackground = Color(uiColor: .systemGroupedBackground)
-    static let cardBackground = Color(uiColor: .secondarySystemGroupedBackground)
+    // 瓷器浅色 / 墨玉深色：低饱和背景让金额和图表成为视觉主角
+    static let pageBackground = Color(light: 0xF4F5F2, dark: 0x101312)
+    static let cardBackground = Color(light: 0xFFFFFF, dark: 0x1B1E1D)
+    static let subtleBackground = Color(light: 0xEBEEEA, dark: 0x252927)
+    static let divider = Color(light: 0xE2E6E0, dark: 0x303532)
+
+    static var heroGradient: LinearGradient {
+        LinearGradient(
+            colors: [accent, accent.opacity(0.76)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 
     // 间距
     enum Spacing {
@@ -42,18 +52,18 @@ enum Theme {
 
     // 圆角
     enum Radius {
-        static let card: CGFloat = 16
-        static let button: CGFloat = 12
-        static let sheet: CGFloat = 20
-        static let icon: CGFloat = 22
+        static let card: CGFloat = 24
+        static let button: CGFloat = 16
+        static let sheet: CGFloat = 28
+        static let icon: CGFloat = 14
     }
 
     /// 字号规范：金额三档（26 / 17 / 13），统一圆体；等宽数字在调用处加 .monospacedDigit()
     enum Fonts {
         /// 超大金额：净资产、总资产
-        static let amountXL = Font.system(size: 32, weight: .bold, design: .rounded)
+        static let amountXL = Font.system(size: 40, weight: .bold, design: .rounded)
         /// 卡片主金额
-        static let amountL = Font.system(size: 26, weight: .semibold, design: .rounded)
+        static let amountL = Font.system(size: 30, weight: .semibold, design: .rounded)
         /// 列表金额
         static let amountM = Font.system(size: 17, weight: .medium, design: .rounded)
         /// 辅助金额
@@ -73,6 +83,7 @@ enum Theme {
     }
 
     static let presets: [Preset] = [
+        Preset(id: "sage", name: "苔绿", hex: 0x526B60),
         Preset(id: "mist", name: "雾蓝", hex: 0x5B7C99),
         Preset(id: "bean", name: "豆绿", hex: 0x1F6F5C),
         Preset(id: "latte", name: "奶咖", hex: 0x9C7B5B),
@@ -180,7 +191,73 @@ private struct CardStyleModifier: ViewModifier {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                    .strokeBorder(Color.primary.opacity(0.045), lineWidth: 0.5)
             )
+            .shadow(color: .black.opacity(0.045), radius: 18, x: 0, y: 8)
+    }
+}
+
+/// 内容区标题：主标题、辅助说明与可选右侧入口保持同一基线。
+struct LedgerSectionHeader: View {
+    let title: String
+    var detail: String? = nil
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+            Spacer()
+            if let detail {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+struct LedgerIconBadge: View {
+    let systemImage: String
+    var tint: Color = Theme.accent
+    var size: CGFloat = 42
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.40, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: size, height: size)
+            .background(tint.opacity(0.11), in: RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
+    }
+}
+
+struct PremiumEmptyState: View {
+    let systemImage: String
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(spacing: Theme.Spacing.m) {
+            LedgerIconBadge(systemImage: systemImage, tint: .secondary, size: 58)
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.headline)
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Theme.Spacing.xxl)
+        .padding(.horizontal, Theme.Spacing.xl)
+    }
+}
+
+struct SoftPressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.975 : 1)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .animation(.spring(response: 0.24, dampingFraction: 0.78), value: configuration.isPressed)
     }
 }

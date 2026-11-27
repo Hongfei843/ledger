@@ -255,25 +255,28 @@ struct TransactionListView: View {
                     }
                     }
                     .listStyle(.insetGrouped)
-                    .listSectionSpacing(10)
-                    .contentMargins(.top, 6, for: .scrollContent)
+                    .scrollContentBackground(.hidden)
+                    .background(Theme.pageBackground)
+                    .listSectionSpacing(14)
+                    .contentMargins(.top, 0, for: .scrollContent)
                 }
 
                 Button {
                     showEntry = true
                 } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 16, weight: .semibold))
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 17, weight: .bold))
                         Text("记一笔")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 18)
-                    .frame(height: 50)
-                    .background(Theme.accent, in: Capsule())
-                    .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
+                    .padding(.horizontal, 22)
+                    .frame(height: 56)
+                    .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+                    .shadow(color: Theme.accent.opacity(0.30), radius: 16, y: 7)
                 }
+                .buttonStyle(SoftPressButtonStyle())
                 .padding(.trailing, Theme.Spacing.xl)
                 .padding(.bottom, Theme.Spacing.xxl)
             }
@@ -485,31 +488,81 @@ struct TransactionListView: View {
 
     private func monthSummaryCard() -> some View {
         let netWorth = BalanceService.totals(accounts: accounts, transactions: allTxns, bookId: BookScope.currentId).netWorthMinor
-        return VStack(spacing: Theme.Spacing.s) {
-            HStack(spacing: Theme.Spacing.s) {
-                summaryTile(title: "支出", systemImage: "arrow.up.right", amount: periodExpense, color: .primary)
-                summaryTile(title: "收入", systemImage: "arrow.down.left", amount: periodIncome, color: Theme.income)
+        return VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            HStack {
+                Label("本期支出", systemImage: "arrow.up.right")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                if let change = monthOverMonth {
+                    Text("\(change >= 0 ? "较上期 +" : "较上期 ")\(String(format: "%.0f%%", change * 100))")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.white.opacity(0.14), in: Capsule())
+                }
+            }
+            .foregroundStyle(.white.opacity(0.82))
+
+            Text(Money.format(periodExpense))
+                .font(Theme.Fonts.amountXL)
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.58)
+                .contentTransition(.numericText())
+
+            HStack(spacing: Theme.Spacing.xl) {
+                heroMetric(title: "收入", value: Money.format(periodIncome))
+                heroMetric(title: "结余", value: Money.format(periodIncome - periodExpense))
+                heroMetric(title: "昨日支出", value: Money.format(yesterdayExpense))
             }
 
             NavigationLink {
                 AssetOverviewView()
             } label: {
-                HStack(spacing: Theme.Spacing.s) {
-                    metric("结余", Money.format(periodIncome - periodExpense))
-                    Divider().frame(height: 18)
-                    metric("昨日", Money.format(yesterdayExpense))
-                    Divider().frame(height: 18)
-                    metric("净资产", Money.format(netWorth))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.tertiary)
+                HStack {
+                    Text("净资产")
+                        .font(.caption)
+                    Spacer()
+                    Text(Money.format(netWorth))
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                    Image(systemName: "arrow.right")
+                        .font(.caption.weight(.semibold))
                 }
-                .padding(.horizontal, Theme.Spacing.m)
-                .padding(.vertical, 10)
-                .cardStyle(radius: 12)
+                .foregroundStyle(.white)
+                .padding(.top, Theme.Spacing.m)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(.white.opacity(0.18)).frame(height: 0.5)
+                }
             }
             .buttonStyle(.plain)
         }
+        .padding(Theme.Spacing.xl)
+        .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            Circle()
+                .fill(.white.opacity(0.07))
+                .frame(width: 150, height: 150)
+                .offset(x: 54, y: -64)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: Theme.accent.opacity(0.22), radius: 24, x: 0, y: 12)
+    }
+
+    private func heroMetric(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.68))
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func summaryTile(title: String, systemImage: String, amount: Int64, color: Color) -> some View {
@@ -618,18 +671,11 @@ struct TransactionListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: Theme.Spacing.m) {
-            Image(systemName: "tray")
-                .font(.system(size: 36, weight: .light))
-                .foregroundStyle(.tertiary)
-            Text("\(greeting)，这里还空着")
-                .font(.headline)
-            Text("点右下角的「记一笔」开始")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Theme.Spacing.xxl)
+        PremiumEmptyState(
+            systemImage: "square.and.pencil",
+            title: "\(greeting)，从第一笔开始",
+            message: "每一笔都清楚，月底自然心里有数。\n点击右下角「记一笔」开始。"
+        )
     }
 
     /// 按当前时段打招呼（借鉴 Cookie 的时间感知设计）
@@ -750,12 +796,12 @@ struct TxnRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.m) {
-            CategoryIconView(category: category, size: 40)
+            CategoryIconView(category: category, size: 44)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text(category?.name ?? txn.type.displayName)
-                        .font(.subheadline)
+                    Text(primaryTitle)
+                        .font(.subheadline.weight(.medium))
                         .lineLimit(1)
                     if txn.isRefund {
                         Text("退款")
@@ -782,14 +828,19 @@ struct TxnRow: View {
         .padding(.vertical, 2)
     }
 
-    /// 副标题：备注 · 账户（备注为空时只显示账户）
+    private var primaryTitle: String {
+        if let payee = txn.payee, !payee.isEmpty { return payee }
+        return category?.name ?? txn.type.displayName
+    }
+
+    /// 商家作为主标题，分类、备注与账户退居第二层，扫读更接近真实账单。
     private var subtitle: String {
         var parts: [String] = []
+        if txn.payee?.isEmpty == false, let categoryName = category?.name {
+            parts.append(categoryName)
+        }
         if let note = txn.note, !note.isEmpty {
             parts.append(note)
-        }
-        if let payee = txn.payee, !payee.isEmpty {
-            parts.append(payee)
         }
         if refundedMinor > 0 {
             parts.append("已退 \(Money.format(refundedMinor))")

@@ -333,28 +333,32 @@ struct EntrySheet: View {
     }
 
     private var amountDisplay: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(Money.symbol)
-                .font(Theme.Fonts.amount(22, weight: .medium))
-                .foregroundStyle(.secondary)
-            Text(amountText)
-                .font(Theme.Fonts.amount(40))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-            Spacer()
-        }
-        .padding(.horizontal, Theme.Spacing.l)
-        .padding(.vertical, Theme.Spacing.m)
-        .overlay(alignment: .bottomLeading) {
+        VStack(spacing: Theme.Spacing.s) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Spacer(minLength: 0)
+                Text(Money.symbol)
+                    .font(Theme.Fonts.amount(26, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text(amountText)
+                    .font(Theme.Fonts.amount(52, weight: .semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.45)
+                Spacer(minLength: 0)
+            }
             if let ocrHint {
-                Text(ocrHint)
-                    .font(.caption2)
+                Label(ocrHint, systemImage: "sparkles")
+                    .font(.caption)
                     .foregroundStyle(Theme.warning)
-                    .padding(.leading, Theme.Spacing.l)
-                    .padding(.bottom, 2)
+            } else {
+                Text(selectedType.displayName)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
+        .padding(.horizontal, Theme.Spacing.l)
+        .padding(.vertical, Theme.Spacing.l)
+        .contentTransition(.numericText())
     }
 
     private func detectedPaymentBanner(_ detected: DetectedPaymentMethod) -> some View {
@@ -431,17 +435,19 @@ struct EntrySheet: View {
             selectedCategoryId = category.id
             Haptics.selection()
         } label: {
-            VStack(spacing: 3) {
-                CategoryIconView(category: category, size: 40)
-                    .overlay(Circle().stroke(selected ? Theme.accent : Color.clear, lineWidth: 2))
+            VStack(spacing: 5) {
+                CategoryIconView(category: category, size: 42)
                 Text(category.name)
-                    .font(.system(size: 10))
+                    .font(.system(size: 11, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? Theme.accent : .secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.65)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(selected ? Theme.accent.opacity(0.11) : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SoftPressButtonStyle())
     }
 
     private var transferSection: some View {
@@ -508,8 +514,12 @@ struct EntrySheet: View {
                 }
             }
             .padding(.horizontal, Theme.Spacing.m)
-            .padding(.vertical, Theme.Spacing.xs + 2)
-            .background(selected ? Theme.accent.opacity(0.16) : Color(.secondarySystemBackground), in: Capsule())
+            .padding(.vertical, Theme.Spacing.s)
+            .background(selected ? Theme.accent.opacity(0.13) : Theme.subtleBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(selected ? Theme.accent.opacity(0.34) : Color.clear, lineWidth: 1)
+            )
             .foregroundStyle(selected ? Theme.accent : .primary)
         }
         .buttonStyle(.plain)
@@ -563,7 +573,7 @@ struct EntrySheet: View {
                 .font(.caption2)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(selected ? Theme.accent.opacity(0.16) : Color(.secondarySystemBackground), in: Capsule())
+                .background(selected ? Theme.accent.opacity(0.16) : Theme.subtleBackground, in: Capsule())
                 .foregroundStyle(selected ? Theme.accent : .secondary)
         }
         .buttonStyle(.plain)
@@ -579,13 +589,14 @@ struct EntrySheet: View {
                 appendKey(key)
             }
             Button(action: save) {
-                Text(canSave ? "保存 \(Money.format(amountMinor))" : "保存")
+                Text(canSave ? "保存 \(Money.format(amountMinor))" : "输入金额后保存")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(canSave ? Theme.accent : Color.gray.opacity(0.3), in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
-                    .foregroundStyle(.white)
+                    .padding(.vertical, 15)
+                    .background(canSave ? Theme.accent : Theme.subtleBackground, in: RoundedRectangle(cornerRadius: Theme.Radius.button, style: .continuous))
+                    .foregroundStyle(canSave ? .white : .secondary)
             }
+            .buttonStyle(SoftPressButtonStyle())
             .disabled(!canSave)
             .padding(.horizontal, Theme.Spacing.l)
         }
@@ -913,11 +924,11 @@ struct NumberPad: View {
                             Text(key)
                                 .font(Theme.Fonts.amount(22, weight: .medium))
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 48)
-                                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .frame(height: 50)
+                                .background(Theme.subtleBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .foregroundStyle(.primary)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SoftPressButtonStyle())
                         .onLongPressGesture(minimumDuration: 0.6) {
                             if key == "⌫" { onKey("C") }
                         }

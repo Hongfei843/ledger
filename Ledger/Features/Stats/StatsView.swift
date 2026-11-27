@@ -71,15 +71,24 @@ struct StatsView: View {
     }
 
     private var monthSwitcher: some View {
-        HStack {
-            Button { shiftMonth(-1) } label: { Image(systemName: "chevron.left") }
+        HStack(spacing: Theme.Spacing.m) {
+            Button { shiftMonth(-1) } label: {
+                Image(systemName: "chevron.left")
+                    .frame(width: 34, height: 34)
+                    .background(Theme.subtleBackground, in: Circle())
+            }
             Spacer()
             Text(monthTitle)
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
             Spacer()
-            Button { shiftMonth(1) } label: { Image(systemName: "chevron.right") }
+            Button { shiftMonth(1) } label: {
+                Image(systemName: "chevron.right")
+                    .frame(width: 34, height: 34)
+                    .background(Theme.subtleBackground, in: Circle())
+            }
         }
         .buttonStyle(.plain)
+        .padding(.horizontal, Theme.Spacing.xs)
         .padding(.top, Theme.Spacing.s)
     }
 
@@ -93,20 +102,25 @@ struct StatsView: View {
     }
 
     private var caliberHint: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(caliberDescription)
-            if caliber == .personal && summary.pendingMinor == 0 && summary.expenseMinor > 0 {
-                Text("本月没有待报销记录，所以这个口径与「现金流」结果相同。")
-                    .foregroundStyle(.secondary)
-            }
-            if caliber == .personal && summary.pendingMinor > 0 {
-                Text("已剔除待报销 \(Money.format(summary.pendingMinor))")
-                    .foregroundStyle(Theme.warning)
+        HStack(alignment: .top, spacing: Theme.Spacing.s) {
+            Image(systemName: "info.circle")
+                .foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(caliberDescription)
+                if caliber == .personal && summary.pendingMinor == 0 && summary.expenseMinor > 0 {
+                    Text("本月没有待报销记录，所以这个口径与「现金流」结果相同。")
+                        .foregroundStyle(.secondary)
+                }
+                if caliber == .personal && summary.pendingMinor > 0 {
+                    Text("已剔除待报销 \(Money.format(summary.pendingMinor))")
+                        .foregroundStyle(Theme.warning)
+                }
             }
         }
-        .font(.caption2)
+        .font(.caption)
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Theme.Spacing.xs)
     }
 
     private var caliberDescription: String {
@@ -121,28 +135,59 @@ struct StatsView: View {
     }
 
     private var summaryCard: some View {
-        VStack(spacing: Theme.Spacing.m) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
             HStack {
-                metric(title: caliber == .advance ? "垫付" : "支出", value: Money.format(summary.expenseMinor), color: .primary)
-                Divider().frame(height: 28)
-                metric(title: caliber == .advance ? "报销到账" : "收入", value: Money.format(summary.incomeMinor), color: Theme.income)
-                Divider().frame(height: 28)
-                metric(title: "净额", value: Money.format(summary.balanceMinor), color: .primary)
+                Text(caliber == .advance ? "本期垫付" : "本期支出")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text(caliber.displayName)
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.14), in: Capsule())
             }
-            if summary.pendingMinor > 0 {
-                HStack {
-                    Text("待报销")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(Money.format(summary.pendingMinor))
-                        .font(.caption.weight(.medium))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.warning)
+            .foregroundStyle(.white.opacity(0.80))
+
+            Text(Money.format(summary.expenseMinor))
+                .font(Theme.Fonts.amountXL)
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.58)
+
+            HStack(spacing: Theme.Spacing.l) {
+                heroStat(title: caliber == .advance ? "报销到账" : "收入", value: summary.incomeMinor)
+                heroStat(title: "净额", value: summary.balanceMinor)
+                if summary.pendingMinor > 0 {
+                    heroStat(title: "待报销", value: summary.pendingMinor)
                 }
             }
         }
-        .cardStyle(padding: Theme.Spacing.l)
+        .padding(Theme.Spacing.xl)
+        .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            Circle()
+                .fill(.white.opacity(0.07))
+                .frame(width: 150, height: 150)
+                .offset(x: 54, y: -64)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: Theme.accent.opacity(0.22), radius: 24, x: 0, y: 12)
+    }
+
+    private func heroStat(title: String, value: Int64) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.68))
+            Text(Money.format(value))
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func metric(title: String, value: String, color: Color) -> some View {
@@ -162,8 +207,7 @@ struct StatsView: View {
         Group {
             if !insights.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                    Text("现金流洞察")
-                        .font(.subheadline.weight(.semibold))
+                    LedgerSectionHeader(title: "现金流洞察")
 
                     ForEach(insights) { insight in
                         HStack(alignment: .top, spacing: Theme.Spacing.s) {
@@ -210,8 +254,7 @@ struct StatsView: View {
 
     private var donutSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Text(caliber == .advance ? "垫付构成" : "支出构成")
-                .font(.subheadline.weight(.semibold))
+            LedgerSectionHeader(title: caliber == .advance ? "垫付构成" : "支出构成")
 
             if slices.isEmpty {
                 emptyHint
@@ -285,14 +328,7 @@ struct StatsView: View {
 
     private var rankSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-            HStack {
-                Text("分类排行")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("点击查看明细")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            LedgerSectionHeader(title: "分类排行", detail: "点击查看明细")
 
             if slices.isEmpty {
                 emptyHint
@@ -353,16 +389,15 @@ struct StatsView: View {
 
     private var trendSection: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Text(caliber == .advance ? "近 6 个月垫付" : "近 6 个月支出")
-                .font(.subheadline.weight(.semibold))
+            LedgerSectionHeader(title: caliber == .advance ? "近 6 个月垫付" : "近 6 个月支出")
 
             Chart(buckets) { bucket in
                 BarMark(
                     x: .value("月份", String(bucket.id.suffix(2)) + "月"),
                     y: .value("支出", Double(bucket.expenseMinor) / 100.0)
                 )
-                .foregroundStyle(Theme.accent.opacity(0.85))
-                .cornerRadius(4)
+                .foregroundStyle(Theme.accent.gradient)
+                .cornerRadius(6)
             }
             .frame(height: 160)
         }

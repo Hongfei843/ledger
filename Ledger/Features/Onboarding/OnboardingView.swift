@@ -79,24 +79,28 @@ struct OnboardingView: View {
     // MARK: - 步骤
 
     private var welcome: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.m) {
-            Text("一分钟把账本搭起来")
-                .font(.title2.weight(.semibold))
+        VStack(alignment: .leading, spacing: Theme.Spacing.l) {
+            LedgerIconBadge(systemImage: "sparkles", size: 72)
+                .padding(.top, Theme.Spacing.xl)
+            Text("先把账，\n记得刚刚好。")
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .tracking(-0.5)
             Text("记账最难的不是记，是「账对不上」。先把账户和余额设对，后面才省心。")
-                .font(.subheadline)
+                .font(.body)
                 .foregroundStyle(.secondary)
+                .lineSpacing(4)
 
-            VStack(alignment: .leading, spacing: Theme.Spacing.s) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.m) {
                 bullet("1", "选几个常用账户")
                 bullet("2", "给信用卡设账单日与还款日")
                 bullet("3", "之后每月提醒你对一次余额")
             }
-            .padding(.top, Theme.Spacing.s)
+            .padding(Theme.Spacing.l)
+            .cardStyle(radius: 20)
 
-            Text("所有数据只存在这台手机上，随时可以导出备份。")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .padding(.top, Theme.Spacing.s)
+            Label("所有数据只存在这台手机上，随时可以导出备份。", systemImage: "lock.shield")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 

@@ -97,7 +97,7 @@ struct CategoryIconView: View {
     let colorHex: String
     var size: CGFloat = 44
 
-    @AppStorage(CategoryIcon.styleKey) private var styleRaw: String = IconStyle.emoji.rawValue
+    @AppStorage(CategoryIcon.styleKey) private var styleRaw: String = IconStyle.symbol.rawValue
 
     private var tint: Color {
         Color(hexString: colorHex)
@@ -105,8 +105,8 @@ struct CategoryIconView: View {
 
     var body: some View {
         ZStack {
-            Circle()
-                .fill(tint.opacity(0.18))
+            RoundedRectangle(cornerRadius: size * 0.32, style: .continuous)
+                .fill(tint.opacity(0.13))
             if styleRaw == IconStyle.symbol.rawValue {
                 Image(systemName: CategoryIcon.symbol(for: name))
                     .font(.system(size: size * 0.42, weight: .regular))
