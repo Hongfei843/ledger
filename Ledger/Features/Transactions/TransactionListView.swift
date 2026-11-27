@@ -165,9 +165,13 @@ struct TransactionListView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
-                VStack(spacing: 0) {
-                    homeHeader()
+            // 完全自定义顶部栏，不再使用系统 Toolbar，避免 iOS 给 ToolbarItem 再加一层边框。
+            VStack(spacing: 0) {
+                topBar()
+
+                ZStack(alignment: .bottomTrailing) {
+                    VStack(spacing: 0) {
+                        homeHeader()
 
                     List {
                         if !dueReminders.isEmpty {
@@ -282,9 +286,10 @@ struct TransactionListView: View {
                 }
                 .buttonStyle(SoftPressButtonStyle())
                 .padding(.trailing, Theme.Spacing.xl)
-                // RootTabView 的 safeAreaInset 已为自定义 Tab 栏预留空间；这里只保留呼吸间距，
-                // 避免按钮阴影透过半透明 Tab 栏形成“被压住”的错觉。
-                .padding(.bottom, Theme.Spacing.l)
+                // 真机反馈表明 safeAreaInset 未把 NavigationStack 内的悬浮按钮抬起来，
+                // 这里显式叠加 Tab 栏高度，确保按钮完整露在 Tab 栏上方。
+                .padding(.bottom, Theme.Layout.tabBarHeight + Theme.Spacing.m)
+                }
             }
             .overlay(alignment: .top) {
                 if let toast {
@@ -311,42 +316,7 @@ struct TransactionListView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
-            .navigationTitle("明细")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    periodMenu
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    // 右侧操作组与左侧周期控件共用胶囊容器，避免系统把两个按钮散开渲染。
-                    HStack(spacing: 0) {
-                        PhotosPicker(selection: $screenshotItem, matching: .images, photoLibrary: .shared()) {
-                            if isScreenshotBusy {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "text.viewfinder")
-                                    .font(.system(size: 15, weight: .semibold))
-                            }
-                        }
-                        .frame(width: 34, height: Theme.Layout.toolbarControlHeight)
-                        .contentShape(Rectangle())
-                        .disabled(isScreenshotBusy)
-                        .accessibilityLabel("截图识别记账")
-
-                        NavigationLink {
-                            SearchView()
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 15, weight: .semibold))
-                                .frame(width: 34, height: Theme.Layout.toolbarControlHeight)
-                                .contentShape(Rectangle())
-                        }
-                        .accessibilityLabel("搜索")
-                    }
-                    .foregroundStyle(.secondary)
-                    .toolbarCapsuleStyle()
-                }
-            }
+            .navigationBarHidden(true)
             .onChange(of: screenshotItem) { _, item in
                 guard let item else { return }
                 isScreenshotBusy = true
@@ -394,6 +364,55 @@ struct TransactionListView: View {
                 PeriodPreference.save(range: newValue)
             }
         }
+    }
+
+    // MARK: - 自定义顶部栏
+
+    private func topBar() -> some View {
+        HStack(spacing: 0) {
+            periodMenu
+            Spacer(minLength: 8)
+            trailingToolbar
+        }
+        .padding(.horizontal, Theme.Spacing.m)
+        .frame(height: 52)
+        .background(Theme.pageBackground)
+        .overlay {
+            Text("明细")
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .allowsHitTesting(false)
+        }
+    }
+
+    private var trailingToolbar: some View {
+        HStack(spacing: 0) {
+            PhotosPicker(selection: $screenshotItem, matching: .images, photoLibrary: .shared()) {
+                if isScreenshotBusy {
+                    ProgressView()
+                } else {
+                    Image(systemName: "text.viewfinder")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+            }
+            .frame(width: 34, height: Theme.Layout.toolbarControlHeight)
+            .contentShape(Rectangle())
+            .disabled(isScreenshotBusy)
+            .accessibilityLabel("截图识别记账")
+
+            NavigationLink {
+                SearchView()
+            } label: {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 34, height: Theme.Layout.toolbarControlHeight)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("搜索")
+        }
+        .foregroundStyle(.secondary)
+        .toolbarCapsuleStyle()
     }
 
     // MARK: - 周期切换
@@ -530,18 +549,8 @@ struct TransactionListView: View {
         }
         .padding(.top, Theme.Spacing.xs)
         .padding(.bottom, Theme.Spacing.s)
-        // 顶部用极淡的品牌色渐隐到页面底色，避免主卡阴影在下方形成一道灰色断层。
-        .background(
-            LinearGradient(
-                colors: [
-                    Theme.accent.opacity(0.045),
-                    Theme.pageBackground,
-                    Theme.pageBackground
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        // 与列表使用完全相同的纯色背景，不叠加渐变，避免出现横向色带。
+        .background(Theme.pageBackground)
     }
 
     private func monthSummaryCard() -> some View {
@@ -605,7 +614,6 @@ struct TransactionListView: View {
                 .offset(x: 54, y: -64)
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: Theme.accent.opacity(0.10), radius: 14, x: 0, y: 6)
     }
 
     private func heroMetric(title: String, value: String) -> some View {

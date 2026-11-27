@@ -65,8 +65,8 @@ enum Theme {
         static let tabBarHeight: CGFloat = 68
         /// 顶部工具栏胶囊高度，左侧周期控件与右侧操作组保持一致。
         static let toolbarControlHeight: CGFloat = 36
-        /// 列表底部为悬浮按钮预留的空间：Tab 栏 + 按钮高度 + 呼吸空间。
-        static let fabClearance: CGFloat = 92
+        /// 列表底部为悬浮按钮预留的空间：Tab 栏 68 + 按钮 56 + 呼吸空间。
+        static let fabClearance: CGFloat = 140
     }
 
     /// 字号规范：金额三档（26 / 17 / 13），统一圆体；等宽数字在调用处加 .monospacedDigit()
