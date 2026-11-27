@@ -263,4 +263,51 @@ final class BackupRestoreTests: XCTestCase {
         XCTAssertEqual(categories.filter { $0.bookId == first.id }.count, expectedCount)
         XCTAssertEqual(categories.filter { $0.bookId == second.id }.count, expectedCount)
     }
+
+    @MainActor
+    func testReimbursementSettlementCreatesIncomeAndPersonalShortfall() throws {
+        let context = makeContext()
+        let book = Book(name: "日常")
+        let account = Account(bookId: book.id, name: "储蓄卡", type: .debit)
+        let claim = Claim(bookId: book.id, title: "出差")
+        let original = Txn(bookId: book.id, type: .expense, amountMinor: 5_000, accountId: account.id)
+        original.isReimbursable = true
+        original.claimId = claim.id
+        context.insert(book)
+        context.insert(account)
+        context.insert(claim)
+        context.insert(original)
+
+        let income = ReimbursementSettlementService.receive(
+            claim: claim,
+            totalMinor: 5_000,
+            amountMinor: 3_000,
+            accountId: account.id,
+            shortfallCategoryId: nil,
+            context: context
+        )
+        XCTAssertNotNil(income)
+        XCTAssertNil(ReimbursementSettlementService.receive(
+            claim: claim,
+            totalMinor: 5_000,
+            amountMinor: 3_000,
+            accountId: account.id,
+            shortfallCategoryId: nil,
+            context: context
+        ))
+
+        let txns = try context.fetch(FetchDescriptor<Txn>())
+        XCTAssertEqual(txns.count, 3)
+        XCTAssertEqual(txns.filter { $0.source == .reimbursement }.count, 1)
+        XCTAssertEqual(claim.status, .reimbursed)
+        XCTAssertEqual(claim.shortfallMinor, 2_000)
+        let personal = StatsEngine.summary(
+            range: AppCalendar.monthInterval(containing: Date()),
+            caliber: .personal,
+            txns: txns,
+            claims: [claim]
+        )
+        XCTAssertEqual(personal.expenseMinor, 2_000)
+        XCTAssertEqual(personal.incomeMinor, 0)
+    }
 }

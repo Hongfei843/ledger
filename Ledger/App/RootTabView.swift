@@ -119,6 +119,18 @@ struct RootTabView: View {
         }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
+            ReimbursementSettlementService.backfillMissingShortfalls(context: context)
+            let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+            let statements = (try? context.fetch(FetchDescriptor<Statement>())) ?? []
+            let allTxns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
+            for account in accounts where account.type.isCreditLike && account.deletedAt == nil {
+                StatementSettlementService.rebuild(
+                    accountId: account.id,
+                    transactions: allTxns,
+                    statements: statements
+                )
+            }
+            try? context.save()
             let books = (try? context.fetch(FetchDescriptor<Book>())) ?? []
             let liveBooks = books.filter { $0.deletedAt == nil }
             if let current = BookScope.currentId, liveBooks.contains(where: { $0.id == current }) {

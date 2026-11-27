@@ -110,4 +110,41 @@ enum ReimbursementSettlementService {
         claim.updatedAt = date
         return income
     }
+
+    /// 老版本只保存了 shortfallMinor，没有对应流水。按 claimId 幂等补齐，不改变到账收入。
+    @MainActor
+    static func backfillMissingShortfalls(context: ModelContext) {
+        let claims = ((try? context.fetch(FetchDescriptor<Claim>())) ?? []).filter {
+            $0.deletedAt == nil && $0.status == .reimbursed && $0.shortfallMinor > 0
+        }
+        guard !claims.isEmpty else { return }
+        let txns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
+        let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
+        var didChange = false
+
+        for claim in claims {
+            let related = txns.filter { $0.deletedAt == nil && $0.claimId == claim.id }
+            if related.contains(where: { $0.source == .reimbursement }) { continue }
+            let accountId = claim.receivedAccountId ?? related.first(where: { $0.type == .expense })?.accountId
+            guard let accountId else { continue }
+            let categoryId = categories.first {
+                $0.bookId == claim.bookId && $0.kind == .expense && $0.name == "报销差额" && $0.deletedAt == nil
+            }?.id
+            let shortfall = Txn(
+                bookId: claim.bookId,
+                type: .expense,
+                amountMinor: claim.shortfallMinor,
+                accountId: accountId,
+                occurredAt: claim.reimbursedAt ?? claim.updatedAt,
+                categoryId: categoryId,
+                payee: "报销差额",
+                note: "报销差额 · \(claim.title)",
+                source: .reimbursement
+            )
+            shortfall.claimId = claim.id
+            context.insert(shortfall)
+            didChange = true
+        }
+        if didChange { try? context.save() }
+    }
 }

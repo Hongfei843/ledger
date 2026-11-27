@@ -68,12 +68,20 @@ enum BalanceService {
         }
         var balances = Dictionary(uniqueKeysWithValues: eligible.map { ($0.id, $0.openingBalanceMinor) })
         for txn in transactions where txn.deletedAt == nil && (bookId == nil || txn.bookId == bookId) {
-            let change = delta(txn)
-            if let source = change.source, balances[txn.accountId] != nil {
-                balances[txn.accountId] = (balances[txn.accountId] ?? 0) + source
-            }
-            if let targetId = change.targetAccountId, balances[targetId] != nil {
-                balances[targetId] = (balances[targetId] ?? 0) + change.target
+            switch txn.type {
+            case .expense:
+                if balances[txn.accountId] != nil { balances[txn.accountId] = (balances[txn.accountId] ?? 0) - txn.amountMinor }
+            case .income:
+                if balances[txn.accountId] != nil { balances[txn.accountId] = (balances[txn.accountId] ?? 0) + txn.amountMinor }
+            case .transfer:
+                if balances[txn.accountId] != nil { balances[txn.accountId] = (balances[txn.accountId] ?? 0) - txn.amountMinor }
+                if let targetId = txn.counterAccountId, balances[targetId] != nil {
+                    balances[targetId] = (balances[targetId] ?? 0) + txn.amountMinor
+                }
+            case .adjustment:
+                if balances[txn.accountId] != nil { balances[txn.accountId] = (balances[txn.accountId] ?? 0) + txn.amountMinor }
+            case .loanPayment:
+                break
             }
         }
 

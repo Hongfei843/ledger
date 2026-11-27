@@ -487,7 +487,7 @@ struct TransactionListView: View {
         let netWorth = BalanceService.totals(accounts: accounts, transactions: allTxns, bookId: BookScope.currentId).netWorthMinor
         return VStack(spacing: Theme.Spacing.s) {
             HStack(spacing: Theme.Spacing.s) {
-                summaryTile(title: "支出", systemImage: "arrow.up.right", amount: periodExpense, color: Theme.expense)
+                summaryTile(title: "支出", systemImage: "arrow.up.right", amount: periodExpense, color: .primary)
                 summaryTile(title: "收入", systemImage: "arrow.down.left", amount: periodIncome, color: Theme.income)
             }
 

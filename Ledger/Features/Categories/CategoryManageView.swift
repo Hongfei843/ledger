@@ -112,7 +112,8 @@ struct CategoryManageView: View {
                                 start: Date.distantPast,
                                 end: Date().addingTimeInterval(86400)
                             ),
-                            title: category.name
+                            title: category.name,
+                            caliber: .cashFlow
                         )
                     } label: {
                         Image(systemName: "list.bullet")

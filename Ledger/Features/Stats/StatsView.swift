@@ -275,7 +275,7 @@ struct StatsView: View {
 
     private func categoryColor(for slice: CategorySlice) -> Color {
         guard let category = scopedCategories.first(where: { $0.id == slice.id }) else { return Theme.accent }
-        return Color(hex: category.colorHex) ?? Theme.accent
+        return Color(hexString: category.colorHex)
     }
 
     private func percent(of slice: CategorySlice) -> Double {

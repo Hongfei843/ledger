@@ -69,6 +69,14 @@ enum RecurringService {
 
         if !touchedAccounts.isEmpty {
             let latest = (try? context.fetch(FetchDescriptor<Txn>())) ?? txns
+            let statements = (try? context.fetch(FetchDescriptor<Statement>())) ?? []
+            for account in accounts where touchedAccounts.contains(account.id) && account.type.isCreditLike {
+                StatementSettlementService.rebuild(
+                    accountId: account.id,
+                    transactions: latest,
+                    statements: statements
+                )
+            }
             BalanceService.refreshAll(accounts: accounts, transactions: latest)
             try? context.save()
         }
