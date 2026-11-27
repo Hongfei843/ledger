@@ -1,6 +1,6 @@
 # 轻账 · 交接文档（v1.0 收尾版）
 
-> 最后更新：2026-11-25
+> 最后更新：2026-11-27
 > 用途：开新对话时，把这份文档整段发给下一个 AI / 未来的自己，就能无缝接手。
 
 ---
@@ -13,9 +13,9 @@
 - 推送：`pwsh -File .gh/push.ps1 -Message "..."`
 - 构建：`pwsh -File .gh/ci.ps1`（会自动等结果并抓失败日志）
 - 令牌：`.gh/token.txt`（仓库外，7 天过期）
-- 测试：164 个用例，CI 每次真跑
-- 项目状态：**定稿打磨版（功能冻结）**，可以导入真实数据开始正式使用；后续只做 bug 修复。开发期内部数据不保留迁移逻辑；备份/CSV 等导入格式保持兼容
-- 最近绿色构建：2026-11-26 run 45796388578（`macos-15-intel`，164 测试全绿，**定稿打磨版**：代码整理/字体统一/投资成本派生）
+- 测试：191 个用例，CI 每次真跑
+- 项目状态：**定稿打磨版（功能冻结）**，可以导入真实数据开始正式使用；后续只做 bug 修复与界面手感优化。开发期内部数据不保留迁移逻辑；备份/CSV 等导入格式保持兼容
+- 最近绿色构建：2026-11-27 run 45970833534（`macos-15-intel`，191 测试全绿，提交 `6aee6ab`：明细页视觉统一、周期控件/顶部工具栏/FAB/背景断层修复）
 
 ## 1. 产品定位
 
@@ -120,7 +120,7 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 - ⚠️ `macos-15-arm64` / `macos-26-arm64` 是镜像目录名，**不是合法标签**，写了 job 会永远排队
 - 2026-11 起 macOS 托管 runner 容量长期紧张（尤其 arm64）：job 排队后 `cancelled` 且 0 步执行 = 平台容量问题，不是编译失败；跑 `.gh/ci-race.ps1` 自动轮换标签重试并抓包
 
-## 6. 测试覆盖（164）
+## 6. 测试覆盖（191）
 
 Money、Balance、AccountUsage、BackupRestore、ImportCompatibility、PeriodPreference、MonthlyReport、
 Investment、InvestmentCost、StatsEngine、NetWorthHistory、CashFlowForecast、CreditCardBill、
@@ -301,3 +301,13 @@ CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngi
 - **记账面板**：金额居中放大，账户、分类、日期与保存按钮使用同一套圆角和按压反馈；数字键盘降低视觉噪声。分类图标默认使用线条风格，Emoji 仍可切换。
 - **首次引导**：欢迎页改为更清晰的产品价值表达与步骤卡片，账户设置流程不变。
 - **验收边界**：本轮仍是 SwiftUI 实机界面代码，不以静态设计稿冒充验收。Snapshot/UI、深色/浅色、小屏与大字体的自动化视觉回归继续按第 14 节工程建议补齐。
+
+## 16. 明细页视觉统一（batch 46）
+
+- **周期控件**：左侧「上一期 / 月份 / 下一期」收进统一胶囊；月份 18pt 圆体 semibold，左右箭头 16pt semibold，下拉箭头 12pt semibold，三者同色阶、同字重，禁用态统一褪色。
+- **顶部工具栏**：右侧截图识别与搜索合并为一个同规格胶囊，左右两端高度、描边与留白一致，不再由系统散开渲染。
+- **底部布局**：自定义 Tab 栏继续占据底部安全区，按钮高度改由 `Theme.Layout.tabBarHeight` 统一；「记一笔」阴影收敛，列表底部预留 92pt，避免遮挡最后一笔流水。
+- **背景衔接**：主卡下方改为极淡品牌色渐隐到 `Theme.pageBackground`，阴影半径/透明度下调，消除卡片与明细区之间的灰色断层。
+- **字体层级**：空状态标题 18pt 圆体 semibold、正文 13pt + 4pt 行距；流水主标题 14pt、副标题 `.caption`；分组标题使用 `.caption.weight(.medium)`。
+- **验证**：提交 `6aee6ab580c0fec0cc39debd50fdba7e37a20496`；CI run `45970833534` 成功；`Executed 191 tests, with 0 failures (0 unexpected)`；IPA `D:\开发\dist\Ledger-轻账-视觉统一-6aee6ab.ipa`，4,399,337 bytes，SHA-256 `C8005E75BC8442E6D28516B0F3EC09DC62E4C26B21FB1DC80FFA7B88767B5D05`。
+- **边界**：CI 只覆盖编译与单测；周期比例、Tab/FAB 避让、背景过渡及深色/大字体/小屏仍需真机确认。
