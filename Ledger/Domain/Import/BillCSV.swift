@@ -205,7 +205,9 @@ enum BillCSVParser {
                 }
                 inQuotes.toggle()
                 index += 1
-            } else if (character == "\n" || character == "\r"), !inQuotes {
+            } else if (character == "\n" || character == "\r" || character == "\r\n"), !inQuotes {
+                // Swift 把 CRLF 视作「一个 Character」（字素簇），只判断 \r / \n 会漏掉整行分隔，
+                // 导致 Windows/支付宝导出的 CRLF CSV 被当成一行，导入后一条记录都读不到。
                 records.append(current)
                 current = ""
                 if character == "\r", index + 1 < characters.count, characters[index + 1] == "\n" {
