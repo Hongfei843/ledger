@@ -57,7 +57,10 @@ struct ClaimDetailView: View {
     }
 
     private var receivableAccounts: [Account] {
-        accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && !$0.type.isLiability }
+        accounts.filter {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem
+                && !$0.type.isLiability && $0.bookId == claim.bookId
+        }
     }
 
     var body: some View {
@@ -205,11 +208,20 @@ struct ClaimDetailView: View {
             totalMinor: totalMinor,
             amountMinor: amount,
             accountId: accountId,
-            shortfallCategoryId: categories.first { $0.name == "报销差额" && $0.kind == .expense }?.id,
+            shortfallCategoryId: categories.first {
+                $0.bookId == claim.bookId && $0.name == "报销差额" && $0.kind == .expense
+                    && $0.deletedAt == nil && !$0.isArchived
+            }?.id,
             context: context
         )
-        income?.categoryId = categories.first { $0.name == "报销收入" && $0.kind == .income }?.id
-        guard income != nil else { return }
+        income?.categoryId = categories.first {
+            $0.bookId == claim.bookId && $0.name == "报销收入" && $0.kind == .income
+                && $0.deletedAt == nil && !$0.isArchived
+        }?.id
+        guard income != nil else {
+            saveError = "到账金额需大于 0 且不超过本单垫付总额；也请确认账户与差额分类属于当前账本。"
+            return
+        }
 
         do {
             try context.save()

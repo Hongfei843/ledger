@@ -20,6 +20,7 @@ enum RecurringService {
         guard !active.isEmpty else { return result }
 
         let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
         let txns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         var touchedAccounts = Set<UUID>()
 
@@ -33,6 +34,12 @@ enum RecurringService {
                       accounts.contains(where: {
                           $0.id == targetId && $0.deletedAt == nil && !$0.isArchived && $0.bookId == rule.bookId
                       }) else { continue }
+            } else if let categoryId = rule.categoryId {
+                let expectedKind: CategoryKind = rule.templateType == .income ? .income : .expense
+                guard categories.contains(where: {
+                    $0.id == categoryId && $0.bookId == rule.bookId
+                        && $0.deletedAt == nil && !$0.isArchived && $0.kind == expectedKind
+                }) else { continue }
             }
             let dates = RecurringEngine.dueDates(rule: rule, upTo: today)
             guard !dates.isEmpty else { continue }

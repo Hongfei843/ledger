@@ -65,11 +65,13 @@ struct ExportView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                .onChange(of: rangeOption) { _, _ in fileURL = nil }
                 LabeledContent("记录条数", value: "\(recordCount)")
             }
 
             Section {
                 Toggle("脱敏导出", isOn: $redacted)
+                    .onChange(of: redacted) { _, _ in fileURL = nil }
             } footer: {
                 Text("开启后，商户名与备注替换为 ***、账户名替换为「账户1/2」，金额与分类保留。发给外部 AI 时建议开启。")
             }

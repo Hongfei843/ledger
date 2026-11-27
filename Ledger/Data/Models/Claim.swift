@@ -71,7 +71,21 @@ enum ReimbursementSettlementService {
         at date: Date = Date(),
         context: ModelContext
     ) -> Txn? {
-        guard amountMinor > 0, claim.status == .draft || claim.status == .submitted else { return nil }
+        // 到账不得超过垫付总额，否则会凭空多出一笔收入且不再生成差额流水。
+        guard amountMinor > 0, totalMinor >= 0, amountMinor <= totalMinor,
+              claim.status == .draft || claim.status == .submitted else { return nil }
+        let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        guard accounts.contains(where: {
+            $0.id == accountId && $0.bookId == claim.bookId
+                && $0.deletedAt == nil && !$0.isArchived && !$0.type.isLiability
+        }) else { return nil }
+        if let shortfallCategoryId {
+            let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
+            guard categories.contains(where: {
+                $0.id == shortfallCategoryId && $0.bookId == claim.bookId
+                    && $0.kind == .expense && $0.deletedAt == nil && !$0.isArchived
+            }) else { return nil }
+        }
 
         let income = Txn(
             bookId: claim.bookId,

@@ -8,7 +8,12 @@ struct RecurringListView: View {
     @State private var editing: RecurringRule?
 
     private var activeRules: [RecurringRule] {
-        rules.filter { $0.deletedAt == nil }.sorted { $0.nextDate < $1.nextDate }
+        rules
+            .filter {
+                $0.deletedAt == nil
+                    && (BookScope.currentId == nil || $0.bookId == BookScope.currentId)
+            }
+            .sorted { $0.nextDate < $1.nextDate }
     }
 
     var body: some View {
@@ -112,13 +117,23 @@ struct RecurringEditView: View {
     @State private var autoCreate = true
     @State private var note = ""
 
+    private var targetBookId: UUID? {
+        BookScope.currentId
+            ?? books.first(where: { $0.deletedAt == nil && $0.isDefault })?.id
+            ?? books.first(where: { $0.deletedAt == nil })?.id
+    }
+
     private var selectableAccounts: [Account] {
-        accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+        accounts.filter {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && $0.bookId == targetBookId
+        }
     }
 
     private var selectableCategories: [Category] {
         let kind: CategoryKind = type == .income ? .income : .expense
-        return categories.filter { $0.deletedAt == nil && !$0.isArchived && $0.kind == kind }
+        return categories.filter {
+            $0.deletedAt == nil && !$0.isArchived && $0.kind == kind && $0.bookId == targetBookId
+        }
     }
 
     var body: some View {
@@ -209,6 +224,7 @@ struct RecurringEditView: View {
         let trimmed = title.trimmingCharacters(in: .whitespaces)
 
         if let rule {
+            let scheduleChanged = rule.startDate != startDate || rule.frequency != frequency
             rule.title = trimmed
             rule.templateType = type
             rule.amountMinor = amount
@@ -216,11 +232,15 @@ struct RecurringEditView: View {
             rule.categoryId = categoryId
             rule.frequency = frequency
             rule.startDate = startDate
+            if scheduleChanged {
+                // 修改开始日或频率后从新的起点计算，避免沿用旧 nextDate 意外补记历史流水。
+                rule.nextDate = startDate
+            }
             rule.autoCreate = autoCreate
             rule.note = note.isEmpty ? nil : note
             rule.updatedAt = Date()
         } else {
-            let bookId = BookScope.currentId ?? books.first?.id ?? UUID()
+            guard let bookId = targetBookId else { return }
             let created = RecurringRule(
                 bookId: bookId,
                 title: trimmed,

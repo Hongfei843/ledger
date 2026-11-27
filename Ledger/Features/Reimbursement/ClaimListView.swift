@@ -6,11 +6,17 @@ struct ClaimListView: View {
     @Query(sort: \Claim.createdAt, order: .reverse) private var allClaims: [Claim]
     @Query(sort: \Txn.occurredAt, order: .reverse) private var allTxns: [Txn]
     @Query private var books: [Book]
+    @AppStorage(BookScope.key) private var bookScopeRaw: String = ""
 
     @State private var showNew = false
+    @State private var duplicateHint = false
 
-    private var liveClaims: [Claim] { allClaims.filter { $0.deletedAt == nil } }
-    private var liveTxns: [Txn] { allTxns.filter { $0.deletedAt == nil } }
+    private var liveClaims: [Claim] {
+        allClaims.filter { $0.deletedAt == nil && BookScope.matches($0.bookId, raw: bookScopeRaw) }
+    }
+    private var liveTxns: [Txn] {
+        allTxns.filter { $0.deletedAt == nil && BookScope.matches($0.bookId, raw: bookScopeRaw) }
+    }
 
     private var openClaims: [Claim] {
         liveClaims.filter { $0.status == .draft || $0.status == .submitted }
@@ -70,6 +76,11 @@ struct ClaimListView: View {
             .listSectionSpacing(16)
             .navigationTitle("报销")
             .navigationBarTitleDisplayMode(.inline)
+            .alert("本月已有报销单", isPresented: $duplicateHint) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text("草稿单已存在，垫付条目都记在同一单里，无需重复新建。")
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink {
@@ -179,8 +190,15 @@ struct ClaimListView: View {
     }
 
     private func createClaim() {
-        let bookId = BookScope.currentId ?? books.first?.id ?? UUID()
+        guard let bookId = BookScope.currentId
+            ?? books.first(where: { $0.deletedAt == nil && $0.isDefault })?.id
+            ?? books.first(where: { $0.deletedAt == nil })?.id else { return }
         let monthKey = AppCalendar.monthKey(Date())
+        // 记账页「可报销」已经自动建过当月草稿；这里再建一张会把垫付拆散到两张单。
+        if liveClaims.contains(where: { $0.status == .draft && $0.periodMonth == monthKey }) {
+            duplicateHint = true
+            return
+        }
         let claim = Claim(bookId: bookId, title: "\(monthKey) 报销", periodMonth: monthKey)
         context.insert(claim)
         try? context.save()

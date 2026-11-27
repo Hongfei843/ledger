@@ -32,7 +32,9 @@ struct TransactionListView: View {
     @State private var customEnd = Date()
     @State private var toast: ToastState?
     @State private var toastAction: (() -> Void)?
+    /// 连续删除时累积待撤销记录，撤销一次全部恢复，避免第一笔永久丢失。
     @State private var deletedBuffer: [Txn] = []
+    @State private var toastTask: Task<Void, Never>?
     @State private var screenshotItem: PhotosPickerItem?
     @State private var isScreenshotBusy = false
 
@@ -385,7 +387,8 @@ struct TransactionListView: View {
         HStack(spacing: 2) {
             Button { period = period.shifted(by: -1) } label: {
                 Image(systemName: "chevron.left")
-                    .frame(width: 28, height: 28)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 30, height: 34)
             }
             .disabled(period.kind == .custom)
             .accessibilityLabel("上一期")
@@ -394,7 +397,8 @@ struct TransactionListView: View {
 
             Button { period = period.shifted(by: 1) } label: {
                 Image(systemName: "chevron.right")
-                    .frame(width: 28, height: 28)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 30, height: 34)
             }
             .disabled(period.kind == .custom)
             .accessibilityLabel("下一期")
@@ -421,9 +425,12 @@ struct TransactionListView: View {
 
             ForEach(PeriodKind.allCases) { kind in
                 Button {
-                    if kind == .custom {
-                        showCustomRange = true
-                    } else {
+                if kind == .custom {
+                    // 五页常驻，onAppear 不会在切页时重跑；这里用当前周期初始化才不会跳回启动时的月份。
+                    customStart = period.customStart ?? AppCalendar.startOfMonth(period.anchor)
+                    customEnd = period.customEnd ?? Date()
+                    showCustomRange = true
+                } else {
                         period = PeriodRange(kind: kind, anchor: period.anchor)
                     }
                 } label: {
@@ -437,9 +444,11 @@ struct TransactionListView: View {
         } label: {
             HStack(spacing: 4) {
                 Text(period.compactTitle)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
             .foregroundStyle(.primary)
@@ -691,17 +700,22 @@ struct TransactionListView: View {
     }
 
     private func showToast(_ message: String, actionTitle: String? = nil, duration: Double = 1.8, action: (() -> Void)? = nil) {
+        // 新 toast 替换旧 toast 时取消旧计时器，否则第二条会比 5 秒更早消失。
+        toastTask?.cancel()
         toastAction = action
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             toast = ToastState(message: message, actionTitle: actionTitle)
         }
-        Task {
+        toastTask = Task {
             try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard !Task.isCancelled else { return }
             dismissToast()
         }
     }
 
     private func dismissToast() {
+        toastTask?.cancel()
+        toastTask = nil
         withAnimation(.easeOut(duration: 0.22)) {
             toast = nil
         }
@@ -738,7 +752,7 @@ struct TransactionListView: View {
         try? context.save()
         refreshBalances()
 
-        deletedBuffer = removed
+        deletedBuffer.append(contentsOf: removed)
         Haptics.warning()
         showToast("已删除 \(removed.count) 条", actionTitle: "撤销", duration: 5) {
             restoreDeleted()

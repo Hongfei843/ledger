@@ -18,8 +18,20 @@ struct BillCompareView: View {
     @State private var accountId: UUID?
     @State private var toast: String?
 
+    private var targetBookId: UUID? {
+        BookScope.currentId
+            ?? books.first(where: { $0.deletedAt == nil && $0.isDefault })?.id
+            ?? books.first(where: { $0.deletedAt == nil })?.id
+    }
+
     private var selectableAccounts: [Account] {
-        accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+        accounts.filter {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && $0.bookId == targetBookId
+        }
+    }
+
+    private var scopedTransactions: [Txn] {
+        txns.filter { $0.bookId == targetBookId && $0.accountId == accountId }
     }
 
     var body: some View {
@@ -35,11 +47,17 @@ struct BillCompareView: View {
                 } label: {
                     Label("从剪贴板读取", systemImage: "doc.on.clipboard")
                 }
+                Picker("比对账户", selection: $accountId) {
+                    Text("请选择").tag(UUID?.none)
+                    ForEach(selectableAccounts, id: \.id) { account in
+                        Text(account.displayName).tag(UUID?.some(account.id))
+                    }
+                }
                 if let errorMessage {
                     Text(errorMessage).font(.caption).foregroundStyle(Theme.danger)
                 }
             } footer: {
-                Text("支持支付宝、微信导出的账单 CSV。比对不会改动数据，只告诉你「谁多谁少」。")
+                Text("支持支付宝、微信导出的账单 CSV。比对结果仅限上方所选账户；比对本身不会改动数据，只有点击“全部补录”才会写入。")
             }
 
             if let result {
@@ -52,12 +70,10 @@ struct BillCompareView: View {
 
                 if !result.missing.isEmpty {
                     Section {
-                        Picker("补录到账户", selection: $accountId) {
-                            Text("请选择").tag(UUID?.none)
-                            ForEach(selectableAccounts, id: \.id) { account in
-                                Text(account.displayName).tag(UUID?.some(account.id))
-                            }
-                        }
+                        LabeledContent(
+                            "补录到账户",
+                            value: selectableAccounts.first(where: { $0.id == accountId })?.displayName ?? "请选择"
+                        )
                         Button {
                             fillMissing(result.missing)
                         } label: {
@@ -147,6 +163,11 @@ struct BillCompareView: View {
         .onAppear {
             if accountId == nil { accountId = selectableAccounts.first?.id }
         }
+        .onChange(of: accountId) { _, _ in
+            if !rows.isEmpty {
+                result = BillMatcher.compare(rows: rows, transactions: scopedTransactions)
+            }
+        }
     }
 
     private func row(_ title: String, _ value: String) -> some View {
@@ -191,9 +212,13 @@ struct BillCompareView: View {
 
     private func analyze(text: String) throws {
         errorMessage = nil
+        guard accountId != nil else {
+            errorMessage = "请先选择要比对的账户"
+            return
+        }
         let parsed = try BillCSVParser.parse(text: text)
         rows = parsed.rows
-        result = BillMatcher.compare(rows: parsed.rows, transactions: txns)
+        result = BillMatcher.compare(rows: parsed.rows, transactions: scopedTransactions)
         Haptics.success()
     }
 
@@ -204,22 +229,30 @@ struct BillCompareView: View {
     // MARK: - 补录
 
     private func fillMissing(_ items: [BillRow]) {
-        guard let accountId, let bookId = BookScope.currentId ?? books.first?.id else { return }
-        let inserted = ImportService.importBillRows(
-            items,
-            accountId: accountId,
-            bookId: bookId,
-            categoryId: nil,
-            context: context
-        )
-        withAnimation {
-            toast = "已补录 \(inserted) 条"
-        }
-        Haptics.success()
+        guard let accountId, let bookId = targetBookId else { return }
+        do {
+            let inserted = try ImportService.importBillRows(
+                items,
+                accountId: accountId,
+                bookId: bookId,
+                categoryId: nil,
+                context: context
+            )
+            withAnimation {
+                toast = "已补录 \(inserted) 条"
+            }
+            errorMessage = nil
+            Haptics.success()
 
-        // 补录后重新比对
-        let refreshed = (try? context.fetch(FetchDescriptor<Txn>()))?.filter { $0.deletedAt == nil } ?? txns
-        result = BillMatcher.compare(rows: rows, transactions: refreshed)
+            // 补录后只在当前账本、当前账户内重新比对。
+            let refreshed = ((try? context.fetch(FetchDescriptor<Txn>())) ?? txns)
+                .filter { $0.deletedAt == nil && $0.bookId == bookId && $0.accountId == accountId }
+            result = BillMatcher.compare(rows: rows, transactions: refreshed)
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            Haptics.warning()
+            return
+        }
 
         Task {
             try? await Task.sleep(nanoseconds: 1_800_000_000)

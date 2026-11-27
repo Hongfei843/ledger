@@ -26,6 +26,7 @@ struct AccountEditView: View {
     @State private var costText = ""
     @State private var showBankPicker = false
     @State private var showDeleteConfirm = false
+    @State private var showArchiveConfirm = false
 
     private var selectedBank: BankPreset? {
         BankPreset.find(bankId)
@@ -97,17 +98,26 @@ struct AccountEditView: View {
 
                 if isEditing, let account {
                     Section {
-                        Button("归档该账户") {
-                            account.isArchived = true
-                            account.updatedAt = Date()
-                            try? context.save()
-                            dismiss()
-                        }
+                        Button("归档该账户") { showArchiveConfirm = true }
                         Button("删除该账户", role: .destructive) {
                             showDeleteConfirm = true
                         }
                     } footer: {
                         Text(deleteFooter(account))
+                    }
+                }
+
+                if isEditing, let account, account.isArchived {
+                    Section {
+                        Button("恢复该账户") {
+                            account.isArchived = false
+                            account.updatedAt = Date()
+                            try? context.save()
+                            Haptics.success()
+                            dismiss()
+                        }
+                    } footer: {
+                        Text("恢复后会重新出现在记账账户条、资产与对账页。")
                     }
                 }
             }
@@ -124,6 +134,17 @@ struct AccountEditView: View {
             }
             .sheet(isPresented: $showBankPicker) {
                 BankPickerView(selectedId: $bankId, type: $type, name: $name, cardTail: $cardTail)
+            }
+            .confirmationDialog("归档账户", isPresented: $showArchiveConfirm, titleVisibility: .visible) {
+                Button("归档", role: .destructive) {
+                    account?.isArchived = true
+                    account?.updatedAt = Date()
+                    try? context.save()
+                    dismiss()
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("归档后账户会从记账、资产与对账中隐藏；可在账户管理里恢复。")
             }
             .confirmationDialog("删除后历史流水仍保留，确定？", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
                 Button("删除", role: .destructive) {

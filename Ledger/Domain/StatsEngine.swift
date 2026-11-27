@@ -140,17 +140,16 @@ enum StatsEngine {
             }
         }
 
-        // 待报销金额也要扣除已经发生的退款，避免把已退回的钱继续算作在途垫付。
-        if caliber == .personal {
-            for txn in txns where txn.deletedAt == nil && RefundService.isRefund(txn) {
-                guard let originalId = txn.refundOfTxnId,
-                      let original = txns.first(where: { $0.id == originalId && $0.deletedAt == nil }),
-                      range.contains(original.occurredAt),
-                      original.isReimbursable,
-                      let claimId = original.claimId,
-                      open.contains(claimId) else { continue }
-                pending -= txn.amountMinor
-            }
+        // 待报销金额是独立净额概念：三种口径都必须扣除已发生的退款，
+        // 否则统计页切换口径时同一笔垫付显示不同金额。
+        for txn in txns where txn.deletedAt == nil && RefundService.isRefund(txn) {
+            guard let originalId = txn.refundOfTxnId,
+                  let original = txns.first(where: { $0.id == originalId && $0.deletedAt == nil }),
+                  range.contains(original.occurredAt),
+                  original.isReimbursable,
+                  let claimId = original.claimId,
+                  open.contains(claimId) else { continue }
+            pending -= txn.amountMinor
         }
         pending = max(0, pending)
 
@@ -186,10 +185,15 @@ enum StatsEngine {
             }
         }
 
-        // 退款冲减原分类（退款流水继承了原支出的分类），垫付口径不冲减
+        // 退款冲减「原支出」的分类。退款流水可能被编辑过分类，直接读退款自身 categoryId
+        // 会让统计页和月报对同一笔退款冲到不同分类。
         if caliber != .advance {
             for txn in txns where txn.deletedAt == nil && range.contains(txn.occurredAt) && includesRefund(txn, caliber: caliber, allTxns: txns, openClaims: open, claimsById: claimsById) {
-                if let categoryId = txn.categoryId, let current = totals[categoryId] {
+                let originalId = txn.refundOfTxnId
+                let categoryId = originalId.flatMap { id in
+                    txns.first(where: { $0.id == id && $0.deletedAt == nil })?.categoryId
+                } ?? txn.categoryId
+                if let categoryId, let current = totals[categoryId] {
                     totals[categoryId] = (current.amount - txn.amountMinor, current.count)
                 } else {
                     unknownAmount -= txn.amountMinor

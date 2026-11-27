@@ -174,7 +174,7 @@ final class ImportCompatibilityTests: XCTestCase {
             emoji: nil,
             needReimbursement: false
         )
-        _ = ImportService.importCookie(
+        _ = try ImportService.importCookie(
             records: [record],
             defaultAccountId: fallback.id,
             bookId: currentBook.id,
@@ -189,5 +189,45 @@ final class ImportCompatibilityTests: XCTestCase {
         XCTAssertEqual(category.bookId, currentBook.id)
         XCTAssertNotEqual(account.id, otherAccount.id)
         XCTAssertNotEqual(category.id, otherCategory.id)
+    }
+
+    @MainActor
+    func testCookieImportRejectsDefaultAccountFromOtherBook() throws {
+        let container = ModelContainerFactory.preview()
+        self.container = container
+        let context = container.mainContext
+        let currentBook = Book(name: "当前账本")
+        let otherBook = Book(name: "其他账本")
+        context.insert(currentBook)
+        context.insert(otherBook)
+        let otherAccount = Account(bookId: otherBook.id, name: "其他卡", type: .debit)
+        context.insert(otherAccount)
+        try context.save()
+
+        let record = CookieRecord(
+            externalId: "CROSS-BOOK",
+            occurredAt: Date(),
+            isIncome: false,
+            primaryCategory: "餐饮",
+            secondaryCategory: nil,
+            amountMinor: 1_200,
+            note: "不应导入",
+            accountName: nil,
+            bookName: nil,
+            tags: [],
+            emoji: nil,
+            needReimbursement: false
+        )
+        XCTAssertThrowsError(try ImportService.importCookie(
+            records: [record],
+            defaultAccountId: otherAccount.id,
+            bookId: currentBook.id,
+            context: context
+        )) { error in
+            guard case ImportError.invalidDefaultAccount = error else {
+                return XCTFail("应拒绝跨账本默认账户，实际：\(error)")
+            }
+        }
+        XCTAssertTrue(try context.fetch(FetchDescriptor<Txn>()).isEmpty)
     }
 }

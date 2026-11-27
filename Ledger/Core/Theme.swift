@@ -33,8 +33,9 @@ enum Theme {
     static let divider = Color(light: 0xE2E6E0, dark: 0x303532)
 
     static var heroGradient: LinearGradient {
-        LinearGradient(
-            colors: [accent, accent.opacity(0.76)],
+        let base = UIColor(hexString: accentHex)
+        return LinearGradient(
+            colors: [Color(uiColor: base), Color(uiColor: base.darkened(by: 0.16))],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -61,7 +62,7 @@ enum Theme {
     /// 字号规范：金额三档（26 / 17 / 13），统一圆体；等宽数字在调用处加 .monospacedDigit()
     enum Fonts {
         /// 超大金额：净资产、总资产
-        static let amountXL = Font.system(size: 40, weight: .bold, design: .rounded)
+        static let amountXL = Font.system(size: 38, weight: .semibold, design: .rounded)
         /// 卡片主金额
         static let amountL = Font.system(size: 30, weight: .semibold, design: .rounded)
         /// 列表金额
@@ -166,6 +167,16 @@ extension UIColor {
             blue: b + (1 - b) * t,
             alpha: a
         )
+    }
+    /// 与黑色混合，用于金额主卡渐变末端，保持白字对比度。
+    func darkened(by amount: CGFloat) -> UIColor {
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
+        guard getRed(&r, green: &g, blue: &b, alpha: &a) else { return self }
+        let t = min(max(amount, 0), 1)
+        return UIColor(red: r * (1 - t), green: g * (1 - t), blue: b * (1 - t), alpha: a)
     }
 }
 

@@ -277,6 +277,7 @@ final class BackupRestoreTests: XCTestCase {
         context.insert(account)
         context.insert(claim)
         context.insert(original)
+        try context.save()
 
         let income = ReimbursementSettlementService.receive(
             claim: claim,
@@ -295,6 +296,7 @@ final class BackupRestoreTests: XCTestCase {
             shortfallCategoryId: nil,
             context: context
         ))
+        try context.save()
 
         let txns = try context.fetch(FetchDescriptor<Txn>())
         XCTAssertEqual(txns.count, 3)
@@ -309,5 +311,31 @@ final class BackupRestoreTests: XCTestCase {
         )
         XCTAssertEqual(personal.expenseMinor, 2_000)
         XCTAssertEqual(personal.incomeMinor, 0)
+    }
+
+    @MainActor
+    func testReimbursementRejectsCrossBookAccount() throws {
+        let context = makeContext()
+        let claimBook = Book(name: "报销账本")
+        let otherBook = Book(name: "其他账本")
+        let otherAccount = Account(bookId: otherBook.id, name: "其他卡", type: .debit)
+        let claim = Claim(bookId: claimBook.id, title: "差旅", periodMonth: "2026-11")
+        context.insert(claimBook)
+        context.insert(otherBook)
+        context.insert(otherAccount)
+        context.insert(claim)
+        try context.save()
+
+        let income = ReimbursementSettlementService.receive(
+            claim: claim,
+            totalMinor: 1_000,
+            amountMinor: 1_000,
+            accountId: otherAccount.id,
+            shortfallCategoryId: nil,
+            context: context
+        )
+        XCTAssertNil(income)
+        XCTAssertEqual(claim.status, ClaimStatus.draft)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<Txn>()).isEmpty)
     }
 }

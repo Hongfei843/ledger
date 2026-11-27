@@ -39,6 +39,21 @@ struct StatsView: View {
         slices.reduce(Int64(0)) { $0 + $1.amountMinor }
     }
 
+    /// 环形图最多画 8 块，其余合并为「其他 N 类」，保证图上占比合计与圆心总额一致。
+    private var chartSlices: [CategorySlice] {
+        guard slices.count > 8 else { return slices }
+        let rest = slices.dropFirst(8)
+        let merged = CategorySlice(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000008") ?? UUID(),
+            name: "其他 \(rest.count) 类",
+            emoji: "•••",
+            colorHex: "9AA39E",
+            amountMinor: rest.reduce(Int64(0)) { $0 + $1.amountMinor },
+            count: rest.reduce(0) { $0 + $1.count }
+        )
+        return Array(slices.prefix(8)) + [merged]
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -259,8 +274,8 @@ struct StatsView: View {
             if slices.isEmpty {
                 emptyHint
             } else {
-                Chart(0..<min(slices.count, 8), id: \.self) { index in
-                    let slice = slices[index]
+                Chart(0..<chartSlices.count, id: \.self) { index in
+                    let slice = chartSlices[index]
                     SectorMark(
                         angle: .value("金额", slice.amountMinor),
                         innerRadius: .ratio(0.62),
@@ -298,7 +313,7 @@ struct StatsView: View {
     /// 环形图图例：颜色 + 分类名 + 占比
     private var legendGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 6) {
-            ForEach(Array(slices.prefix(8).enumerated()), id: \.element.id) { index, slice in
+            ForEach(Array(chartSlices.enumerated()), id: \.element.id) { index, slice in
                 HStack(spacing: 5) {
                     Circle()
                         .fill(categoryColor(for: slice))

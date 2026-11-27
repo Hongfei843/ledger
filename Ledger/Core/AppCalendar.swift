@@ -2,13 +2,14 @@ import Foundation
 
 /// 统一日历与日期区间计算，避免各处手写 Calendar 造成差异。
 enum AppCalendar {
-    static var gregorian: Calendar = {
+    /// 每次读取都取当前时区：App 跨时区/用户改时区后，月份与账务日期必须立即跟随。
+    static var gregorian: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale(identifier: "zh_CN")
         calendar.timeZone = TimeZone.current
         calendar.firstWeekday = 2 // 周一为一周起点
         return calendar
-    }()
+    }
 
     static func startOfDay(_ date: Date) -> Date {
         gregorian.startOfDay(for: date)

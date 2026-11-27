@@ -96,4 +96,15 @@ final class BillCSVTests: XCTestCase {
         XCTAssertEqual(fields.count, 3)
         XCTAssertEqual(fields[1], "b,c")
     }
+
+    func testMultilineSubjectAndUnknownDirectionAreHandledSafely() throws {
+        let csv = "交易时间,交易对方,商品说明,收/支,金额,交易状态,交易订单号\r\n"
+            + "2026-11-23 21:37:08,商店,\"第一行\r\n第二行,含逗号\",支出,38.00,交易成功,ORDER-1\r\n"
+            + "2026-11-23 22:00:00,本人,账户互转,转账,100.00,交易成功,ORDER-2\r\n"
+        let result = try BillCSVParser.parse(text: csv)
+        XCTAssertEqual(result.rows.count, 1)
+        XCTAssertEqual(result.rows.first?.subject, "第一行\r\n第二行,含逗号")
+        XCTAssertEqual(result.rows.first?.externalId, "ORDER-1")
+        XCTAssertEqual(result.skipped, 1)
+    }
 }

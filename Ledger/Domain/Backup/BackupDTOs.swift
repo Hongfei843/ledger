@@ -180,7 +180,8 @@ extension AccountDTO {
         self.iconEmoji = try container.decodeIfPresent(String.self, forKey: .iconEmoji) ?? ""
         self.colorHex = try container.decodeIfPresent(String.self, forKey: .colorHex) ?? ""
         self.sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
-        self.includeInNetWorth = try container.decodeIfPresent(Bool.self, forKey: .includeInNetWorth) ?? false
+        // 与 Account 模型默认值保持一致；旧备份缺字段时不能让账户被排除出净资产。
+        self.includeInNetWorth = try container.decodeIfPresent(Bool.self, forKey: .includeInNetWorth) ?? true
         self.isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
         self.bankId = try container.decodeIfPresent(String.self, forKey: .bankId)
         self.cardTail = try container.decodeIfPresent(String.self, forKey: .cardTail)

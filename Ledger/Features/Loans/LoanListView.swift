@@ -10,12 +10,19 @@ struct LoanListView: View {
 
     @State private var showNew = false
 
+    private var currentBookId: UUID? {
+        BookScope.currentId
+            ?? books.first(where: { $0.deletedAt == nil && $0.isDefault })?.id
+            ?? books.first(where: { $0.deletedAt == nil })?.id
+    }
+
     private var activeLoans: [Loan] {
-        loans.filter { $0.deletedAt == nil && $0.status != .archived }
+        loans.filter { $0.deletedAt == nil && $0.status != .archived && $0.bookId == currentBookId }
     }
 
     private var liveItems: [LoanScheduleItem] {
-        items.filter { $0.deletedAt == nil }
+        let loanIds = Set(activeLoans.map(\.id))
+        return items.filter { $0.deletedAt == nil && loanIds.contains($0.loanId) }
     }
 
     private var totalDebtMinor: Int64 {

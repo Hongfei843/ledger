@@ -74,4 +74,28 @@ final class CookieCSVImporterTests: XCTestCase {
         XCTAssertEqual(fields.count, 3)
         XCTAssertEqual(fields[1], "b,c")
     }
+
+    func testParseQuotedMultilineNoteAndCRLF() throws {
+        let meta = metaBase64(id: "MULTILINE", emoji: "u1f35c")
+        let csv = "时间,收支,一级分类,二级分类,金额,币种,备注,卡包,账本,标签,其他\r\n"
+            + "2026-11-24 10:40:22,支出,餐饮,,¥12.30,CNY,\"第一行\r\n第二行,含逗号\",,,,\(meta)\r\n"
+
+        let records = try CookieCSVImporter.parse(text: csv)
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.note, "第一行\r\n第二行,含逗号")
+        XCTAssertEqual(records.first?.externalId, "MULTILINE")
+    }
+
+    func testTransferRowsAreNotMisclassifiedAsExpense() throws {
+        let expenseMeta = metaBase64(id: "EXPENSE", emoji: "u1f35c")
+        let transferMeta = metaBase64(id: "TRANSFER", emoji: "u1f4b3")
+        let csv = """
+        时间,收支,一级分类,二级分类,金额,币种,备注,卡包,账本,标签,其他
+        2026-11-24 10:40:22,支出,餐饮,,¥12.30,CNY,午饭,,,,\(expenseMeta)
+        2026-11-24 11:40:22,转账,转账,,¥100,CNY,银行卡互转,,,,\(transferMeta)
+        """
+        let records = try CookieCSVImporter.parse(text: csv)
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.externalId, "EXPENSE")
+    }
 }

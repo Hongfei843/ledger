@@ -1,5 +1,6 @@
 import XCTest
 import Foundation
+import SwiftData
 @testable import Ledger
 
 final class RecurringEngineTests: XCTestCase {
@@ -80,5 +81,71 @@ final class RecurringEngineTests: XCTestCase {
         let rule = makeRule(start: date(2025, 1, 1), frequency: .daily)
         let dates = RecurringEngine.dueDates(rule: rule, upTo: date(2026, 11, 24), limit: 40)
         XCTAssertEqual(dates.count, 40)
+    }
+
+    @MainActor
+    func testRecurringServiceRejectsCrossBookCategory() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let book = Book(name: "当前")
+        let otherBook = Book(name: "其他")
+        let account = Account(bookId: book.id, name: "现金", type: .cash)
+        let otherCategory = Category(bookId: otherBook.id, name: "房租", kind: .expense)
+        let today = date(2026, 11, 24)
+        let rule = RecurringRule(
+            bookId: book.id,
+            title: "房租",
+            templateType: .expense,
+            amountMinor: 300_000,
+            accountId: account.id,
+            frequency: .monthly,
+            startDate: today
+        )
+        rule.autoCreate = true
+        rule.categoryId = otherCategory.id
+        context.insert(book)
+        context.insert(otherBook)
+        context.insert(account)
+        context.insert(otherCategory)
+        context.insert(rule)
+        try context.save()
+
+        let result = RecurringService.run(context: context, today: today)
+        XCTAssertEqual(result.createdCount, 0)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<Txn>()).isEmpty)
+    }
+
+    @MainActor
+    func testRecurringServiceCreatesWithSameBookReferences() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let book = Book(name: "当前")
+        let account = Account(bookId: book.id, name: "现金", type: .cash)
+        let category = Category(bookId: book.id, name: "房租", kind: .expense)
+        let today = date(2026, 11, 24)
+        let rule = RecurringRule(
+            bookId: book.id,
+            title: "房租",
+            templateType: .expense,
+            amountMinor: 300_000,
+            accountId: account.id,
+            frequency: .monthly,
+            startDate: today
+        )
+        rule.autoCreate = true
+        rule.categoryId = category.id
+        context.insert(book)
+        context.insert(account)
+        context.insert(category)
+        context.insert(rule)
+        try context.save()
+
+        let result = RecurringService.run(context: context, today: today)
+        XCTAssertEqual(result.createdCount, 1)
+        let txn = try XCTUnwrap(context.fetch(FetchDescriptor<Txn>()).first)
+        XCTAssertEqual(txn.bookId, book.id)
+        XCTAssertEqual(txn.accountId, account.id)
+        XCTAssertEqual(txn.categoryId, category.id)
+        XCTAssertEqual(account.cachedBalanceMinor, -300_000)
     }
 }

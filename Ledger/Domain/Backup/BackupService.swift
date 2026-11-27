@@ -170,7 +170,8 @@ enum BackupService {
     @MainActor
     @discardableResult
     static func restore(_ backup: LedgerBackup, into context: ModelContext, autoBackupDirectory: URL? = nil) throws -> (counts: BackupCounts, autoBackupURL: URL?) {
-        guard backup.formatVersion == formatVersion else {
+        // v1 与 v2 的 DTO 结构兼容，decodeDetailed 已做宽容升级；这里不能再把 v1 挡在恢复门外。
+        guard (1...formatVersion).contains(backup.formatVersion) else {
             throw BackupError.unsupportedVersion(backup.formatVersion)
         }
 

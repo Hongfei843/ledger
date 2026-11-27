@@ -25,7 +25,8 @@ struct InvestmentPortfolio {
     let positions: [InvestmentPosition]
 
     var profitMinor: Int64? {
-        guard costMinor > 0 else { return nil }
+        // 只要有一个持仓没填成本，总收益就不是可解释的数字，不能把它的市值当成利润。
+        guard costMinor > 0, !positions.isEmpty, positions.allSatisfy({ $0.profitMinor != nil }) else { return nil }
         return valueMinor - costMinor
     }
 

@@ -87,7 +87,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          DEVICE_ID=$(xcrun simctl list devices available | grep -m1 "iPhone" | sed -E 's/.*\(([0-9A-Fa-f-]{36})\).*/\1/')
+          # 取 iOS 18+ 的可用 iPhone；deployment target 是 18.0，旧 runtime 会导致假失败。
+          DEVICE_ID=$(python3 - <<'PY'
+          import json, subprocess
+          data = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j']))
+          candidates = []
+          for runtime, devices in data.get('devices', {}).items():
+              if 'iOS-' not in runtime:
+                  continue
+              tail = runtime.rsplit('iOS-', 1)[1]
+              nums = [int(x) for x in tail.split('-') if x.isdigit()]
+              major = nums[0] if nums else 0
+              if major < 18:
+                  continue
+              for device in devices:
+                  if device.get('isAvailable') and device.get('name', '').startswith('iPhone'):
+                      candidates.append((major, device['name'], device['udid']))
+          if not candidates:
+              raise SystemExit('ERROR: 没有可用的 iOS 18+ iPhone 模拟器')
+          candidates.sort(key=lambda x: (-x[0], x[1]))
+          print(candidates[0][2])
+          PY
+          )
+          test -n "$DEVICE_ID" || { echo "ERROR: 未取得模拟器 ID"; exit 1; }
           echo "使用模拟器: $DEVICE_ID"
           xcodebuild test \
             -project Ledger.xcodeproj \

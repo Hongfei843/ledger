@@ -61,12 +61,13 @@ enum BillCSVParser {
     static func parse(text: String) throws -> ParseResult {
         var raw = text
         if raw.hasPrefix("\u{FEFF}") { raw.removeFirst() }
-        let lines = raw.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let lines = splitRecords(raw).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
 
         guard let headerIndex = lines.firstIndex(where: { line in
             let normalized = normalizeHeader(line)
             return normalized.contains("交易时间") || normalized.contains("交易创建时间")
                 || normalized.contains("发生时间") || normalized.contains("记账时间")
+                || normalized.contains("交易日期")
         }) else {
             throw Failure(message: "找不到表头（需要包含「交易时间」等列）")
         }
@@ -122,6 +123,16 @@ enum BillCSVParser {
                 skipped += 1
                 continue
             }
+            let isIncome: Bool
+            if direction.contains("收入") {
+                isIncome = true
+            } else if direction.contains("支出") {
+                isIncome = false
+            } else {
+                // 转账、方向缺失等不能安全推断的记录不冒充支出导入。
+                skipped += 1
+                continue
+            }
             if let status = value("status"),
                ["退款成功", "已关闭", "交易关闭", "已全额退款", "失败"].contains(where: { status.contains($0) }) {
                 skipped += 1
@@ -131,8 +142,8 @@ enum BillCSVParser {
             rows.append(
                 BillRow(
                     occurredAt: date,
-                    amountMinor: abs(amount),
-                    isIncome: direction.contains("收入"),
+                    amountMinor: amount == Int64.min ? Int64.max : abs(amount),
+                    isIncome: isIncome,
                     counterparty: value("counterparty"),
                     subject: value("subject"),
                     externalId: value("orderId"),
@@ -173,6 +184,42 @@ enum BillCSVParser {
         if headerLine.contains("\t") { return "\t" }
         if headerLine.contains(";"), !headerLine.contains(",") { return ";" }
         return ","
+    }
+
+    /// 按 CSV 记录切分，支持 CRLF 以及引号字段内的换行；字段内容保持原样供 splitFields 解码。
+    static func splitRecords(_ text: String) -> [String] {
+        var records: [String] = []
+        var current = ""
+        var inQuotes = false
+        let characters = Array(text)
+        var index = 0
+
+        while index < characters.count {
+            let character = characters[index]
+            if character == "\"" {
+                current.append(character)
+                if inQuotes, index + 1 < characters.count, characters[index + 1] == "\"" {
+                    current.append(characters[index + 1])
+                    index += 2
+                    continue
+                }
+                inQuotes.toggle()
+                index += 1
+            } else if (character == "\n" || character == "\r"), !inQuotes {
+                records.append(current)
+                current = ""
+                if character == "\r", index + 1 < characters.count, characters[index + 1] == "\n" {
+                    index += 2
+                } else {
+                    index += 1
+                }
+            } else {
+                current.append(character)
+                index += 1
+            }
+        }
+        records.append(current)
+        return records
     }
 
     /// 支持引号内逗号与双引号转义

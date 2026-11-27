@@ -19,6 +19,26 @@ struct ImportSummary {
     }
 }
 
+enum ImportError: LocalizedError {
+    case invalidDefaultAccount
+    case invalidCategory
+    case saveFailed(String)
+    case balanceRefreshFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidDefaultAccount:
+            return "默认账户不属于当前账本，或已归档/删除。请重新选择当前账本中的有效账户。"
+        case .invalidCategory:
+            return "导入分类不属于当前账本，或已归档/删除。"
+        case .saveFailed(let message):
+            return "导入保存失败，未确认写入数据：\(message)"
+        case .balanceRefreshFailed(let message):
+            return "流水已导入，但余额缓存刷新失败。请重新打开 App 核对余额：\(message)"
+        }
+    }
+}
+
 enum ImportService {
     /// 把解析后的 Cookie 记录写入本地库。幂等：靠 externalId 去重。
     @discardableResult
@@ -28,21 +48,28 @@ enum ImportService {
         bookId: UUID,
         context: ModelContext,
         autoMatchCategories: Bool = true
-    ) -> ImportSummary {
+    ) throws -> ImportSummary {
         var summary = ImportSummary()
 
         let existingTxns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
-        var knownExternalIds = Set(existingTxns.compactMap { $0.externalId })
+        // 软删除的记录不应继续占用 externalId，否则删掉后无法重新导入同一批账单。
+        var knownExternalIds = Set(existingTxns.filter { $0.deletedAt == nil }.compactMap { $0.externalId })
 
         let allCategories = ((try? context.fetch(FetchDescriptor<Category>())) ?? []).filter { $0.bookId == bookId }
         var categoryIndex: [String: Category] = [:]
-        for category in allCategories where category.deletedAt == nil {
+        for category in allCategories where category.deletedAt == nil && !category.isArchived {
             categoryIndex["\(category.kind.rawValue)|\(category.name)"] = category
         }
 
         let allAccounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        guard allAccounts.contains(where: {
+            $0.id == defaultAccountId && $0.bookId == bookId
+                && $0.deletedAt == nil && !$0.isArchived && !$0.isSystem
+        }) else {
+            throw ImportError.invalidDefaultAccount
+        }
         var accountIndex: [String: Account] = [:]
-        for account in allAccounts where account.deletedAt == nil && account.bookId == bookId {
+        for account in allAccounts where account.deletedAt == nil && !account.isArchived && account.bookId == bookId {
             accountIndex[account.name] = account
         }
 
@@ -62,7 +89,11 @@ enum ImportService {
             if let existing = categoryIndex[categoryKey] {
                 category = existing
             } else if autoMatchCategories,
-                      let matched = CategoryMatcher.match(name: record.primaryCategory, kind: kind, categories: allCategories) {
+                      let matched = CategoryMatcher.match(
+                          name: record.primaryCategory,
+                          kind: kind,
+                          categories: allCategories.filter { $0.deletedAt == nil && !$0.isArchived }
+                      ) {
                 // 外部叫法（美食 / App 订阅 / 电费）落到已有分类，避免分类表膨胀
                 category = matched
                 categoryIndex[categoryKey] = matched
@@ -123,12 +154,21 @@ enum ImportService {
             summary.inserted += 1
         }
 
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw ImportError.saveFailed(error.localizedDescription)
+        }
 
         let allTxns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         let refreshedAccounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
         BalanceService.refreshAll(accounts: refreshedAccounts, transactions: allTxns)
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            throw ImportError.balanceRefreshFailed(error.localizedDescription)
+        }
 
         return summary
     }
@@ -141,9 +181,24 @@ enum ImportService {
         bookId: UUID,
         categoryId: UUID?,
         context: ModelContext
-    ) -> Int {
+    ) throws -> Int {
+        let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
+        guard accounts.contains(where: {
+            $0.id == accountId && $0.bookId == bookId
+                && $0.deletedAt == nil && !$0.isArchived && !$0.isSystem
+        }) else {
+            throw ImportError.invalidDefaultAccount
+        }
+        if let categoryId {
+            let categories = (try? context.fetch(FetchDescriptor<Category>())) ?? []
+            guard categories.contains(where: {
+                $0.id == categoryId && $0.bookId == bookId && $0.deletedAt == nil && !$0.isArchived
+            }) else {
+                throw ImportError.invalidCategory
+            }
+        }
         let existing = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
-        var knownExternalIds = Set(existing.compactMap { $0.externalId })
+        var knownExternalIds = Set(existing.filter { $0.deletedAt == nil }.compactMap { $0.externalId })
         var inserted = 0
 
         for row in rows {
@@ -169,12 +224,20 @@ enum ImportService {
             inserted += 1
         }
 
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw ImportError.saveFailed(error.localizedDescription)
+        }
 
-        let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
         let allTxns = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         BalanceService.refreshAll(accounts: accounts, transactions: allTxns)
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            throw ImportError.balanceRefreshFailed(error.localizedDescription)
+        }
 
         return inserted
     }

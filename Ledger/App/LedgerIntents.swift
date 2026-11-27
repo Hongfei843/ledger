@@ -73,6 +73,10 @@ struct MonthlySpendingIntent: AppIntent {
     static var openAppWhenRun: Bool { false }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // Siri 不需要打开 App 也能播报，但开启应用锁时不能绕过锁暴露金额。
+        guard !UserDefaults.standard.bool(forKey: "security.lockEnabled") else {
+            return .result(dialog: "轻账已锁定，请先解锁 App 后再查询。")
+        }
         guard let container = ModelContainerFactory.make() else {
             return .result(dialog: "轻账的数据还没准备好。")
         }

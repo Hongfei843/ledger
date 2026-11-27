@@ -32,7 +32,7 @@ struct RefundSheet: View {
 
     private var activeAccounts: [Account] {
         accounts
-            .filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+            .filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && $0.bookId == original.bookId }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 

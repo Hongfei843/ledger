@@ -51,7 +51,7 @@ struct SearchView: View {
 
             Section {
                 HStack {
-                    Text("\(results.count) 笔")
+                    Text(results.count > 200 ? "显示前 200 / 共 \(results.count) 笔" : "\(results.count) 笔")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()

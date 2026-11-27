@@ -82,6 +82,9 @@ struct RootTabView: View {
 
     @State private var showOnboarding = false
     @State private var showQuickEntry = false
+    /// 锁屏期间来自 Siri / 桌面快捷方式的动作，解锁后再执行，避免余额与表单暴露在锁屏之上。
+    @State private var pendingQuickEntry = false
+    @State private var pendingSharedFile: SharedFile?
     @State private var selectedTab: LedgerTab = .transactions
 
     /// 从系统「分享到本应用」或「用其他应用打开」传进来的文件
@@ -92,29 +95,21 @@ struct RootTabView: View {
     @State private var importHint: String?
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            TransactionListView()
-                .tag(LedgerTab.transactions)
-
-            StatsView()
-                .tag(LedgerTab.stats)
-
-            ClaimListView()
-                .tag(LedgerTab.claims)
-
-            AssetsHomeView()
-                .tag(LedgerTab.assets)
-
-            SettingsView()
-                .tag(LedgerTab.settings)
+        // 不再使用系统 TabView，避免 iOS 26 即使隐藏 tabItem 仍残留空白胶囊背景。
+        // 五页常驻可保留各自的导航与滚动状态，非当前页不接收触摸和辅助功能焦点。
+        ZStack {
+            tabLayer(.transactions) { TransactionListView() }
+            tabLayer(.stats) { StatsView() }
+            tabLayer(.claims) { ClaimListView() }
+            tabLayer(.assets) { AssetsHomeView() }
+            tabLayer(.settings) { SettingsView() }
         }
         .tint(Theme.accent)
-        .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             LedgerFloatingTabBar(selection: $selectedTab)
         }
-        // 切换主题色时强制重建，让所有引用 Theme.accent 的视图立即生效
-        .id(accentHex)
+        // 主题色变化只触发重绘，不重建根视图；否则导航栈、周期选择与滚动位置会全部复位。
+        .onChange(of: accentHex) { _, _ in Haptics.selection() }
         .onOpenURL { url in
             handleIncomingURL(url)
         }
@@ -172,7 +167,16 @@ struct RootTabView: View {
             if !showing { takePendingScreenshotDraft() }
         }
         .onChange(of: unlocked) { _, didUnlock in
-            if didUnlock { takePendingScreenshotDraft() }
+            guard didUnlock else { return }
+            takePendingScreenshotDraft()
+            if pendingQuickEntry {
+                pendingQuickEntry = false
+                showQuickEntry = true
+            }
+            if let file = pendingSharedFile {
+                pendingSharedFile = nil
+                sharedFile = file
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .screenshotImportReady)) { _ in
             takePendingScreenshotDraft()
@@ -184,7 +188,7 @@ struct RootTabView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .intentOpenEntry)) { _ in
             IntentBridge.clearPending()
-            showQuickEntry = true
+            presentEntry()
         }
         .onReceive(NotificationCenter.default.publisher(for: .intentImportScreenshot)) { _ in
             IntentBridge.clearPending()
@@ -216,7 +220,7 @@ struct RootTabView: View {
             }
             if let action = IntentBridge.takePending() {
                 switch action {
-                case .entry: showQuickEntry = true
+                case .entry: presentEntry()
                 case .screenshot: importScreenshotFromInbox()
                 }
             }
@@ -233,11 +237,30 @@ struct RootTabView: View {
 
     // MARK: - 快速启动（长按桌面图标）
 
+    /// 记账面板统一入口：应用锁未解除时暂存动作，解锁后再弹出。
+    private func presentEntry() {
+        if lockEnabled && !unlocked {
+            pendingQuickEntry = true
+            return
+        }
+        pendingQuickEntry = false
+        showQuickEntry = true
+    }
+
+    /// 分享进来的文件同样受应用锁保护。
+    private func presentSharedFile(_ file: SharedFile) {
+        if lockEnabled && !unlocked {
+            pendingSharedFile = file
+            return
+        }
+        sharedFile = file
+    }
+
     private func handleQuickAction(_ type: String) {
         UserDefaults.standard.removeObject(forKey: AppDelegate.pendingQuickActionKey)
         switch type {
         case AppDelegate.entryAction:
-            showQuickEntry = true
+            presentEntry()
         case AppDelegate.screenshotAction:
             importScreenshotFromInbox()
         default:
@@ -246,6 +269,14 @@ struct RootTabView: View {
     }
 
     // MARK: - 截图 / 文件入口
+
+    private func tabLayer<Content: View>(_ tab: LedgerTab, @ViewBuilder content: () -> Content) -> some View {
+        content()
+            .opacity(selectedTab == tab ? 1 : 0)
+            .allowsHitTesting(selectedTab == tab)
+            .accessibilityHidden(selectedTab != tab)
+            .zIndex(selectedTab == tab ? 1 : 0)
+    }
 
     private func handleIncomingURL(_ url: URL) {
         if url.scheme == "ledger" {
@@ -260,11 +291,11 @@ struct RootTabView: View {
                 importScreenshot(fromFileURL: url)
                 return
             }
-            sharedFile = SharedFile(url: url)
+            presentSharedFile(SharedFile(url: url))
             return
         }
 
-        sharedFile = SharedFile(url: url)
+        // 非 file URL 不该被当成 CSV 文件读取（Info.plist 收敛后也不应再出现），直接忽略。
     }
 
     /// 快捷指令把截图存进「轻账」目录后，用 ledger://import-screenshot 触发

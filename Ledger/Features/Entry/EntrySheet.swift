@@ -848,7 +848,8 @@ struct EntrySheet: View {
     private func draftClaimId(bookId: UUID) -> UUID {
         let monthKey = AppCalendar.monthKey(occurredAt)
         if let existing = claims.first(where: {
-            $0.deletedAt == nil && $0.status == .draft && $0.periodMonth == monthKey
+            $0.deletedAt == nil && $0.bookId == bookId
+                && $0.status == .draft && $0.periodMonth == monthKey
         }) {
             return existing.id
         }

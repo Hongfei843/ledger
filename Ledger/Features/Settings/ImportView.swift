@@ -24,8 +24,16 @@ struct ImportView: View {
         self.initialFileURL = initialFileURL
     }
 
+    private var targetBookId: UUID? {
+        BookScope.currentId
+            ?? books.first(where: { $0.deletedAt == nil && $0.isDefault })?.id
+            ?? books.first(where: { $0.deletedAt == nil })?.id
+    }
+
     private var selectableAccounts: [Account] {
-        accounts.filter { $0.deletedAt == nil && !$0.isArchived && !$0.isSystem }
+        accounts.filter {
+            $0.deletedAt == nil && !$0.isArchived && !$0.isSystem && $0.bookId == targetBookId
+        }
     }
 
     private var previewRecords: [CookieRecord] {
@@ -38,7 +46,7 @@ struct ImportView: View {
 
     /// 预览「账单分类 → 本地分类」的映射结果
     private var categoryPreview: [(source: String, target: String)] {
-        let existing = (try? context.fetch(FetchDescriptor<Category>())) ?? []
+        let existing = ((try? context.fetch(FetchDescriptor<Category>())) ?? []).filter { $0.bookId == targetBookId }
         var seen = Set<String>()
         var result: [(String, String)] = []
 
@@ -47,7 +55,7 @@ struct ImportView: View {
             guard !seen.contains(name) else { continue }
             seen.insert(name)
             let kind: CategoryKind = record.isIncome ? .income : .expense
-            let target = CategoryMatcher.match(name: name, kind: kind, categories: existing)?.name ?? "其他"
+            let target = CategoryMatcher.match(name: name, kind: kind, categories: existing)?.name ?? "\(name)（新建）"
             result.append((name, target))
         }
         return Array(result.prefix(8))
@@ -71,7 +79,7 @@ struct ImportView: View {
                         .foregroundStyle(Theme.danger)
                 }
             } footer: {
-                Text("支持 Cookie 记账导出的 CSV（含表头「时间,收支,一级分类…」）。按原始记录 ID 去重，重复导入不会产生重复账。")
+                Text("支持 Cookie 记账导出的 CSV（含表头「时间,收支,一级分类…」）。按原始记录 ID 去重，重复导入不会产生重复账。仅导入收入/支出，转账等未建模类型会跳过，请先核对识别条数。")
             }
 
             Section {
@@ -263,15 +271,24 @@ struct ImportView: View {
 
     private func runImport() {
         guard let accountId = defaultAccountId,
-              let bookId = BookScope.currentId ?? books.first?.id else { return }
+              let bookId = targetBookId else {
+            errorMessage = "没有可用的当前账本或默认账户"
+            return
+        }
         isWorking = true
-        let result = ImportService.importCookie(
-            records: records,
-            defaultAccountId: accountId,
-            bookId: bookId,
-            context: context
-        )
-        summary = result
-        isWorking = false
+        defer { isWorking = false }
+        do {
+            let result = try ImportService.importCookie(
+                records: records,
+                defaultAccountId: accountId,
+                bookId: bookId,
+                context: context
+            )
+            summary = result
+            errorMessage = nil
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            Haptics.warning()
+        }
     }
 }

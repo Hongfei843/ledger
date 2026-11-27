@@ -11,11 +11,12 @@ struct ClaimReportView: View {
     @State private var pdfURL: URL?
 
     private var report: ClaimMonthlyReport {
-        ClaimReportBuilder.build(
+        let bookId = BookScope.currentId
+        return ClaimReportBuilder.build(
             monthAnchor: monthAnchor,
-            claims: claims,
-            txns: allTxns,
-            categories: categories
+            claims: claims.filter { bookId == nil || $0.bookId == bookId },
+            txns: allTxns.filter { bookId == nil || $0.bookId == bookId },
+            categories: categories.filter { bookId == nil || $0.bookId == bookId }
         )
     }
 

@@ -44,6 +44,8 @@ targets:
         # 否则 Xcode 会报 "Multiple commands produce Info.plist"。
         excludes:
           - "Resources/Info.plist"
+          # 第三方素材授权说明是内部文档，不能随 IPA 一起分发出去。
+          - "Resources/ASSETS_SOURCE.md"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.ledger

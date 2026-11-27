@@ -43,7 +43,14 @@ enum AIExportBuilder {
             claims: input.claims,
             categories: input.categories
         )
-        let months = StatsEngine.byMonth(months: 6, endingAt: input.range.end, txns: liveTxns)
+        // 与总览保持同一口径，否则同一个 AI 分析包里摘要和趋势互相矛盾。
+        let months = StatsEngine.byMonth(
+            months: 6,
+            endingAt: input.range.end,
+            txns: liveTxns,
+            claims: input.claims,
+            caliber: .personal
+        )
 
         let displayAccounts = accountNames(input: input)
 

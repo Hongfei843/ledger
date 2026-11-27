@@ -9,8 +9,14 @@ struct DebtListView: View {
     @State private var showAdd = false
     @State private var editing: Debt?
 
+    private var currentBookId: UUID? {
+        BookScope.currentId
+            ?? books.first(where: { $0.deletedAt == nil && $0.isDefault })?.id
+            ?? books.first(where: { $0.deletedAt == nil })?.id
+    }
+
     private var live: [Debt] {
-        debts.filter { $0.deletedAt == nil }
+        debts.filter { $0.deletedAt == nil && $0.bookId == currentBookId }
     }
 
     private var openLend: [Debt] {
@@ -230,7 +236,9 @@ struct DebtEditView: View {
             debt.note = note.isEmpty ? nil : note
             debt.updatedAt = Date()
         } else {
-            let bookId = BookScope.currentId ?? books.first?.id ?? UUID()
+            guard let bookId = BookScope.currentId
+                ?? books.first(where: { $0.deletedAt == nil && $0.isDefault })?.id
+                ?? books.first(where: { $0.deletedAt == nil })?.id else { return }
             let created = Debt(
                 bookId: bookId,
                 direction: direction,

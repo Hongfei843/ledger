@@ -47,7 +47,7 @@ enum CookieCSVImporter {
         if raw.hasPrefix("\u{FEFF}") {
             raw.removeFirst()
         }
-        let lines = raw.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let lines = BillCSVParser.splitRecords(raw).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard !lines.isEmpty else {
             throw Failure(message: "文件是空的")
         }
@@ -77,8 +77,16 @@ enum CookieCSVImporter {
             let amountText = column(row, "金额") ?? ""
             guard let amount = Money.parse(amountText), amount != 0 else { continue }
 
-            let direction = column(row, "收支") ?? "支出"
-            let isIncome = direction.contains("收入")
+            let direction = column(row, "收支") ?? ""
+            let isIncome: Bool
+            if direction.contains("收入") {
+                isIncome = true
+            } else if direction.contains("支出") {
+                isIncome = false
+            } else {
+                // 转账等未建模类型不能在导入时静默变成支出。
+                continue
+            }
 
             let primary = column(row, "一级分类") ?? "其他"
             let secondary = column(row, "二级分类")
@@ -97,7 +105,7 @@ enum CookieCSVImporter {
                     isIncome: isIncome,
                     primaryCategory: primary,
                     secondaryCategory: secondary,
-                    amountMinor: amount,
+                    amountMinor: amount == Int64.min ? Int64.max : abs(amount),
                     note: column(row, "备注"),
                     accountName: column(row, "卡包"),
                     bookName: column(row, "账本"),

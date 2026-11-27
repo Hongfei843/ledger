@@ -46,28 +46,40 @@ enum ClaimReportBuilder {
         let liveClaims = claims.filter { $0.deletedAt == nil }
         let liveTxns = txns.filter { $0.deletedAt == nil }
 
+        /// 报销月报里所有垫付金额都用净额，与统计页「待报销」口径一致。
+        func advanceNet(_ txn: Txn) -> Int64 {
+            max(0, txn.amountMinor - RefundService.refundedMinor(of: txn, all: liveTxns))
+        }
+
         // 本月新增垫付
         let advances = liveTxns.filter {
             $0.type == .expense && $0.isReimbursable && interval.contains($0.occurredAt)
         }
-        let advanceMinor = advances.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let advanceMinor = advances.reduce(Int64(0)) { $0 + advanceNet($1) }
 
         // 本月报销单
         let monthClaims = liveClaims.filter { $0.periodMonth == monthKey }
         let submittedMinor = monthClaims
-            .filter { $0.submittedAt != nil || $0.status != .draft }
+            .filter { $0.submittedAt != nil }
             .reduce(Int64(0)) { partial, claim in
                 partial + liveTxns.filter { $0.claimId == claim.id && $0.type == .expense && $0.isReimbursable }
-                    .reduce(Int64(0)) { $0 + $1.amountMinor }
+                    .reduce(Int64(0)) { $0 + advanceNet($1) }
             }
-        let receivedMinor = monthClaims.compactMap { $0.receivedAmountMinor }.reduce(Int64(0), +)
+        // 到账计入实际到账月份，否则跨月到账在任何一期月报里都不出现。
+        let receivedMinor = liveClaims
+            .filter { claim in
+                guard let at = claim.reimbursedAt else { return false }
+                return interval.contains(at)
+            }
+            .compactMap { $0.receivedAmountMinor }
+            .reduce(Int64(0), +)
 
         // 月末未到账：所有仍未核销的报销单
         let outstandingMinor = liveClaims
             .filter { $0.status == .draft || $0.status == .submitted }
             .reduce(Int64(0)) { partial, claim in
                 let total = liveTxns.filter { $0.claimId == claim.id && $0.type == .expense && $0.isReimbursable }
-                    .reduce(Int64(0)) { $0 + $1.amountMinor }
+                    .reduce(Int64(0)) { $0 + advanceNet($1) }
                 let received = claim.receivedAmountMinor ?? 0
                 return partial + max(0, total - received)
             }
@@ -77,9 +89,9 @@ enum ClaimReportBuilder {
         var unknown: Int64 = 0
         for txn in advances {
             if let categoryId = txn.categoryId {
-                totals[categoryId, default: 0] += txn.amountMinor
+                totals[categoryId, default: 0] += advanceNet(txn)
             } else {
-                unknown += txn.amountMinor
+                unknown += advanceNet(txn)
             }
         }
         var categoryTotals: [(String, Int64)] = totals.map { pair in
@@ -98,7 +110,7 @@ enum ClaimReportBuilder {
                     id: claim.id,
                     title: claim.title,
                     count: items.count,
-                    totalMinor: items.reduce(Int64(0)) { $0 + $1.amountMinor },
+                    totalMinor: items.reduce(Int64(0)) { $0 + advanceNet($1) },
                     status: claim.status,
                     submittedAt: claim.submittedAt,
                     reimbursedAt: claim.reimbursedAt

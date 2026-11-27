@@ -301,12 +301,28 @@ struct AssetsHomeView: View {
             }
             .buttonStyle(.plain)
 
-            liabilityRow(
-                title: "信用卡",
-                detail: "本期待还",
-                amount: creditDebtMinor,
-                icon: "creditcard"
-            )
+            if let creditAccount = liveAccounts.first(where: {
+                $0.type.isCreditLike && $0.deletedAt == nil && !$0.isArchived && bookMatches($0.bookId)
+            }) {
+                NavigationLink {
+                    AccountDetailView(account: creditAccount)
+                } label: {
+                    liabilityRow(
+                        title: "信用卡",
+                        detail: "本期待还",
+                        amount: creditDebtMinor,
+                        icon: "creditcard"
+                    )
+                }
+                .buttonStyle(.plain)
+            } else {
+                liabilityRow(
+                    title: "信用卡",
+                    detail: "本期待还",
+                    amount: creditDebtMinor,
+                    icon: "creditcard"
+                )
+            }
 
             NavigationLink {
                 DebtListView()

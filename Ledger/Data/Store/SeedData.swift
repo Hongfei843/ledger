@@ -122,8 +122,9 @@ enum SeedData {
     /// 老用户升级：只补缺失的分类，不覆盖已有名称与排序偏好。
     private static func topUpCategories(context: ModelContext, bookId: UUID) {
         let existing = ((try? context.fetch(FetchDescriptor<Category>())) ?? []).filter { $0.bookId == bookId }
-        let existingExpense = Set(existing.filter { $0.kind == .expense && !$0.isArchived }.map { $0.name })
-        let existingIncome = Set(existing.filter { $0.kind == .income && !$0.isArchived }.map { $0.name })
+        // 归档分类也算「已存在」：否则 seed 升级或新建账本时会把归档项复活成同名重复分类。
+        let existingExpense = Set(existing.filter { $0.kind == .expense && $0.deletedAt == nil }.map { $0.name })
+        let existingIncome = Set(existing.filter { $0.kind == .income && $0.deletedAt == nil }.map { $0.name })
 
         var order = (existing.filter { $0.kind == .expense }.map { $0.sortOrder }.max() ?? 0) + 1
         for seed in expenseCategories where !existingExpense.contains(seed.name) {

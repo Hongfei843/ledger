@@ -15,6 +15,12 @@ struct AccountsView: View {
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
+    private var archivedAccounts: [Account] {
+        accounts
+            .filter { $0.deletedAt == nil && $0.isArchived && !$0.isSystem && BookScope.matches($0.bookId, raw: currentBookRaw) }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
     private var liveTxns: [Txn] {
         txns.filter { $0.deletedAt == nil && BookScope.matches($0.bookId, raw: currentBookRaw) }
     }
@@ -64,6 +70,28 @@ struct AccountsView: View {
                     }
                 }
             }
+
+            if !archivedAccounts.isEmpty {
+                Section("已归档") {
+                    ForEach(archivedAccounts, id: \.id) { account in
+                        Button {
+                            editingAccount = account
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(account.displayName).foregroundStyle(.primary)
+                                    Text("已隐藏 · 点此可恢复")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.uturn.backward")
+                                    .foregroundStyle(Theme.accent)
+                            }
+                        }
+                    }
+                }
+            }
         }
         .navigationTitle("账户")
         .toolbar {
@@ -104,9 +132,10 @@ struct AccountsView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text(Money.format(balance))
+            // 与资产页统一：信用卡欠款显示为正数，避免同一账户两处符号相反。
+            Text(Money.format(BalanceService.displayBalance(balance, accountType: account.type)))
                 .monospacedDigit()
-                .foregroundStyle(balance < 0 ? Theme.danger : .primary)
+                .foregroundStyle(BalanceService.displayBalance(balance, accountType: account.type) < 0 ? Theme.danger : .primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
