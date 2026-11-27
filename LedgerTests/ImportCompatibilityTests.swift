@@ -183,7 +183,7 @@ final class ImportCompatibilityTests: XCTestCase {
 
         let txn = try XCTUnwrap(context.fetch(FetchDescriptor<Txn>()).first)
         let account = try XCTUnwrap(context.fetch(FetchDescriptor<Account>()).first { $0.id == txn.accountId })
-        let category = try XCTUnwrap(context.fetch(FetchDescriptor<Category>()).first { $0.id == txn.categoryId })
+        let category = try XCTUnwrap(context.fetch(FetchDescriptor<Ledger.Category>()).first { $0.id == txn.categoryId })
         XCTAssertEqual(txn.bookId, currentBook.id)
         XCTAssertEqual(account.bookId, currentBook.id)
         XCTAssertEqual(category.bookId, currentBook.id)
