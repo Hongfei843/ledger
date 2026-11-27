@@ -58,7 +58,11 @@ enum CookieCSVImporter {
         }
 
         let headers = splitFields(lines[headerIndex]).map { $0.trimmingCharacters(in: .whitespaces) }
-        let indexOf = Dictionary(uniqueKeysWithValues: headers.enumerated().map { ($1, $0) })
+        // 表头可能有重名或结尾空列；uniqueKeysWithValues 会直接崩溃。保留第一次出现的列。
+        var indexOf: [String: Int] = [:]
+        for (index, name) in headers.enumerated() where indexOf[name] == nil {
+            indexOf[name] = index
+        }
 
         func column(_ row: [String], _ name: String) -> String? {
             guard let index = indexOf[name], index < row.count else { return nil }
