@@ -84,7 +84,7 @@ final class BalanceTests: XCTestCase {
         let excluded = Account(bookId: bookA, name: "专用", type: .cash, openingBalanceMinor: 99_000)
         excluded.includeInNetWorth = false
         let otherBook = Account(bookId: bookB, name: "其他账本", type: .cash, openingBalanceMinor: 50_000)
-        let loan = Account(bookId: bookA, name: "房贷", type: .loan, openingBalanceMinor: -500_000, isSystem: true)
+        let loan = Account(bookId: bookA, name: "房贷", type: .loan, openingBalanceMinor: -500_000)
 
         let totals = BalanceService.totals(
             accounts: [cash, credit, excluded, otherBook, loan],

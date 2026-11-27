@@ -258,7 +258,7 @@ final class BackupRestoreTests: XCTestCase {
         SeedData.seedCategoriesIfNeeded(context: context, bookId: second.id)
         SeedData.seedCategoriesIfNeeded(context: context, bookId: second.id)
 
-        let categories = try context.fetch(FetchDescriptor<Category>())
+        let categories = try context.fetch(FetchDescriptor<Ledger.Category>())
         let expectedCount = SeedData.expenseCategories.count + SeedData.incomeCategories.count
         XCTAssertEqual(categories.filter { $0.bookId == first.id }.count, expectedCount)
         XCTAssertEqual(categories.filter { $0.bookId == second.id }.count, expectedCount)
@@ -269,7 +269,7 @@ final class BackupRestoreTests: XCTestCase {
         let context = makeContext()
         let book = Book(name: "日常")
         let account = Account(bookId: book.id, name: "储蓄卡", type: .debit)
-        let claim = Claim(bookId: book.id, title: "出差")
+        let claim = Claim(bookId: book.id, title: "出差", periodMonth: AppCalendar.monthKey(Date()))
         let original = Txn(bookId: book.id, type: .expense, amountMinor: 5_000, accountId: account.id)
         original.isReimbursable = true
         original.claimId = claim.id
@@ -299,7 +299,7 @@ final class BackupRestoreTests: XCTestCase {
         let txns = try context.fetch(FetchDescriptor<Txn>())
         XCTAssertEqual(txns.count, 3)
         XCTAssertEqual(txns.filter { $0.source == .reimbursement }.count, 1)
-        XCTAssertEqual(claim.status, .reimbursed)
+        XCTAssertEqual(claim.status, ClaimStatus.reimbursed)
         XCTAssertEqual(claim.shortfallMinor, 2_000)
         let personal = StatsEngine.summary(
             range: AppCalendar.monthInterval(containing: Date()),
