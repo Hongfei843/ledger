@@ -1,6 +1,6 @@
 # 轻账 · 交接文档（v1.0 收尾版）
 
-> 最后更新：2026-11-27
+> 最后更新：2026-11-28（batch 50：加密备份 + 写入事务化）
 > 用途：开新对话时，把这份文档整段发给下一个 AI / 未来的自己，就能无缝接手。
 
 ---
@@ -10,12 +10,12 @@
 - 仓库：`https://github.com/Hongfei843/ledger`（公开，避免构建额度）
 - 本机工程：`D:\开发\记账App`
 - 构建：GitHub Actions 产出未签名 IPA，本地用全能签/Sideloadly 重签
-- 推送：`pwsh -File .gh/push.ps1 -Message "..."`
+- 推送：`pwsh -File .gh/push.ps1 -Message "..."`（全量，约 6 分钟）；只改几个文件时用 `.gh/push-changed.ps1 -Message "..."`（只传变更 blob，10–30 秒）
 - 构建：`pwsh -File .gh/ci.ps1`（会自动等结果并抓失败日志）
 - 令牌：`.gh/token.txt`（仓库外，7 天过期）
-- 测试：191 个用例，CI 每次真跑
-- 项目状态：**定稿打磨版（功能冻结）**，可以导入真实数据开始正式使用；后续只做 bug 修复与界面手感优化。开发期内部数据不保留迁移逻辑；备份/CSV 等导入格式保持兼容
-- 最近绿色构建：2026-11-28 run `46123175108`（`macos-15-intel`，191 测试全绿，提交 `718a13f`：主卡去投影、恢复圆弧装饰、Tab 滑动胶囊与交叉淡入、回前台提前撤遮罩、我的品牌区压缩），版本 **1.0.188**
+- 测试：199 个用例，CI 每次真跑
+- 项目状态：**可用性加固完成**（功能仍冻结）：加密备份与写入事务化已落地，可以导入真实数据；后续只做 bug 修复与界面手感优化。开发期内部数据不保留迁移逻辑；备份/CSV 等导入格式保持兼容
+- 最近绿色构建：2026-11-28 run `46125964150`（`macos-15-intel`，199 测试全绿，提交 `fdc9067`：加密备份 v2（PBKDF2+AES-GCM、导出自检）、48 处静默 `try?` 全部换成可回滚的 `PersistenceGuard`、恢复流程失败自动写回原数据），版本 **1.0.191**
 
 ## 1. 产品定位
 
@@ -50,7 +50,7 @@
 
 **对账**：一页填实际余额；差异自动生成调整；每次对账留痕（ReconciliationRun）。
 
-**导入导出**：Cookie CSV 导入（自动归类）；支付宝/微信账单比对（漏记/多记）；AI 分析包（ZIP）；完整备份 JSON v2（一键恢复，恢复前自动留副本）。导入兼容：兼容旧版 v1 备份、缺失字段自动补默认；CSV 编码支持 UTF-8(带 BOM)/UTF-16/GB18030/GBK，表头支持全角括号与新别名，分隔符支持逗号/分号/Tab。
+**导入导出**：Cookie CSV 导入（自动归类）；支付宝/微信账单比对（漏记/多记）；AI 分析包（ZIP）；完整备份 v2：**默认口令加密**（`.ledgerbak`，PBKDF2-HMAC-SHA256 21 万轮派生密钥 + AES-GCM-256，导完立刻读回来自检），历史明文 JSON 备份仍可导入；恢复前自动留副本（同为加密），恢复中途写入失败会把原数据写回。导入兼容：兼容旧版 v1 备份、缺失字段自动补默认；CSV 编码支持 UTF-8(带 BOM)/UTF-16/GB18030/GBK，表头支持全角括号与新别名，分隔符支持逗号/分号/Tab。
 
 **其他**：周期记账自动生成；借入借出（应收/应付跟踪）；截图识别记账（本地 OCR，可接快捷指令/操作按钮）；**桌面快捷菜单**（长按 App 图标 → 记一笔 / 截图记账，零配置）；**App Intents / Siri**（内置「记一笔」「截图记账」「本月支出」三个动作，快捷指令 App 搜「轻账」即可用，Siri 可说「用轻账记一笔」「轻账本月支出」）；数据健康度；面容 ID / 触控 ID 锁（先走系统生物识别，失败才退设备密码）；隐私遮罩；极简应用图标（固定单图标）；一键初始化（倒计时 + 二次确认）。
 
@@ -128,9 +128,9 @@ project.yml --XcodeGen--> Ledger.xcodeproj --xcodebuild--> .app --zip--> IPA
 - 下载与改名统一走 `.gh/fetch-ipa.ps1`（不带 `-RunId` 时取 main 最近一次成功的 run），脚本会打印 run / artifact / 大小 / SHA-256，不再手工命名。
 - `dist` 里的旧语义名文件只作历史参考，不再作为交付物；`Ledger-unsigned.ipa` 永远是构建中间产物。
 
-## 6. 测试覆盖（191）
+## 6. 测试覆盖（199）
 
-Money、Balance、AccountUsage、BackupRestore、ImportCompatibility、PeriodPreference、MonthlyReport、
+Money、Balance、AccountUsage、BackupRestore、BackupCrypto（8 条：加解密往返、错口令、改密文、短口令、默认轮数、明文兼容、导出自检、写入守卫）、ImportCompatibility、PeriodPreference、MonthlyReport、
 Investment、InvestmentCost、StatsEngine、NetWorthHistory、CashFlowForecast、CreditCardBill、
 StatementSettlement、LoanCalculator、CreditCardCycle、Statement、Debt、Refund、ScreenshotImport、
 PaymentMethodDetector、CategorySeed、QuickTemplate、TxnSearch、CookieCSVImporter、BillCSV、
@@ -153,6 +153,8 @@ CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngi
 13. 无小组件、无上架准备（素材授权、隐私政策、CloudKit）
 14. **明细页重复遍历**：每次渲染对同一批流水做 5 次以上全量计算（周期支出、周期收入、按日分组、退款索引、环比），5 万笔时会掉帧；改造方向是把周期内流水合并成一次遍历的中间结果，本轮未动
 15. **五 Tab 常驻**：五个页面各自的 `@Query` 同时实时监听，数据量大时内存与首屏成本上升；这是「消除系统 Tab Bar」的代价，改造要先解决导航状态保持
+16. **加密备份尚未真机走通**：加解密与导入导出逻辑有 8 条单测覆盖，但「导出 → 分享到文件 App → 换装后导入」这条真机链路、系统文件选择器对 `.ledgerbak` 的识别、口令面板的键盘遮挡，都还没装到手机上验过
+17. **口令即钥匙**：备份口令不落任何存储，忘了就永久打不开（这是设计取舍，不是 bug）；界面上只做长度下限提醒，不做强度评分
 
 ## 8. 扩展思路（本轮只做设计，不写代码）
 
@@ -287,7 +289,7 @@ CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngi
 
 ### P3：数据安全与生态
 
-- **加密备份与自动本地备份**：独立密码派生密钥，恢复前校验完整性；旧格式继续只读兼容。
+- **加密备份与自动本地备份**：✅ batch 50 已完成（口令派生密钥 + AES-GCM、导出自检、恢复前自动留加密副本）。
 - **可配置导出**：按账本/时间/类型导出 CSV，月报与报销 PDF 支持模板选择。
 - **桌面效率**：小组件、锁屏组件、快捷录入放在签名与分发方案明确之后，不为组件牺牲当前自签可用性。
 
@@ -295,9 +297,9 @@ CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngi
 
 - 在 macOS CI 增加首页、记一笔、资产、报销、统计的 Snapshot/UI 测试，覆盖深色、浅色、小屏与大字体。
 - 用 5 万条流水 + 100 个账户建立性能基准，重点测首页首屏、搜索、统计和资产历史；必要时把 `@Query` 全表加载改为分页/预聚合。
-- 逐步把关键写路径的 `try?` 改为可展示错误与失败回滚，并为“账户余额 = 期初 + 流水”“净资产 = 总资产 - 总负债”“账单已还 ≤ 账单金额”建立不变量测试。
+- ~~逐步把关键写路径的 `try?` 改为可展示错误与失败回滚~~：✅ batch 50 已完成（48 处静默保存改为 `PersistenceGuard.save`：失败即回滚 + 顶部提示 + 落盘日志）。不变量测试仍未补。
 - 真机验收至少走一遍：全新引导、两个账本切换、信用卡部分还款、报销部分到账、退款跨月、备份清空恢复、贷款提前还款。
-- 正式长期使用前优先做加密备份；当前明文 JSON/ZIP 应只存放在用户可信的位置。
+- ~~正式长期使用前优先做加密备份~~：✅ batch 50 已完成。AI 分析包（ZIP）仍是明文，导出前会提示。
 
 ## 15. 视觉系统统一升级（batch 45）
 
@@ -361,7 +363,7 @@ CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngi
 
 **硬门槛（没过就不要导真实数据）**
 
-1. **备份 → 清空 → 恢复演练**：先「我的 → 数据 → 备份与恢复」导出 v2 备份，再初始化数据清库，最后恢复，确认流水数、账户余额、净资产、分类归属与备份前一致。
+1. **备份 → 清空 → 恢复演练**：先「我的 → 数据 → 备份与恢复」设置口令导出加密备份，再初始化数据清库，最后导入恢复，确认流水数、账户余额、净资产、分类归属与备份前一致。**顺手把口令抄在密码管理器里**，这是唯一一次演练也是最要紧的一次。
 2. **小批量导入核对**（10–20 条）：账单比对只补录这批，核对「识别条数 / 金额正负 / 账户 / 分类 / 日期」；再抽查 3 个账户的「余额 = 期初 + 流水」。
 3. **净资产恒等式**：净资产 = 总资产 − 总负债，与账户列表逐项相加的结果一致；信用卡按「当前欠款」录入后显示为负余额。
 
@@ -377,9 +379,9 @@ CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngi
 **可以延后**
 
 10. 5 万笔流水 + 100 账户性能基准（当前 `@Query` 全表加载，量大后首屏会变慢）。
-11. 加密备份（当前备份是明文 JSON，正式长期使用前建议做）。
+11. ~~加密备份~~：✅ batch 50 已完成，不再是延后项。
 
-**时机判断**：1.0.188 装机截图确认视觉无回退 → 过完 1–3 → 就可以开始小批量导入；连续用 1–2 周没有口径/显示问题，再全量导入历史账单。
+**时机判断**：1.0.191 装机后先过一遍加密备份的真机链路（导出 → 分享 → 导入 → 解锁），再走第 1–3 项 → 就可以开始小批量导入；连续用 1–2 周没有口径/显示问题，再全量导入历史账单。
 
 ## 20. 视觉细节返工（batch 49，1.0.188）
 
@@ -393,3 +395,80 @@ CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngi
 
 - **验证**：提交 `718a13ff334142b08c3187e7edd5c4b5460bd313`；CI run `46123175108`（job `140911880649`，`success`）；`Executed 191 tests, with 0 failures (0 unexpected)`；IPA `D:\开发\dist\Ledger-轻账-1.0.188.ipa`，4,435,681 bytes，SHA-256 `CBA8920688C3DB664E192D6D77ECF2593DA9C22CEC7FC1EAEFF5DFDF73B087FE`；artifact `Ledger-1.0.188-unsigned-ipa`（id `15254702381`）。
 - **边界**：CI 只覆盖编译与单测。遮罩是否还「隐约可见」、胶囊滑动的手感、交叉淡入是否够利落、品牌区压缩后的比例，都需要 1.0.188 真机确认；深色 / 大字体 / 小屏仍未验。
+
+## 21. 可用性加固：加密备份 + 写入事务化（batch 50，1.0.191）
+
+这一轮不做视觉、不做新功能，只解决「敢不敢把真账放进去」的两个硬问题。顺序是用户定的：**先硬性问题，再功能，最后审美**。
+
+### 21.1 写入事务化：48 处静默失败全部改成可感知、可回滚
+
+**问题**：全仓 48 处 `try? context.save()`。`try?` 吞掉错误的结果是——磁盘满、迁移冲突、约束失败时，内存里的改动还在、界面看起来像保存成功，重进 App 数据没了。记账 App 这是最坏的一类 bug：**它不报错，只是悄悄少一笔**。
+
+**做法**：新增 `Ledger/Data/Store/PersistenceGuard.swift`。
+
+```swift
+enum PersistenceGuard {
+    @discardableResult
+    static func save(_ context: ModelContext, _ action: String) -> Bool
+}
+```
+
+- 成功返回 `true`，调用方可以接着做后续动作；
+- 失败立即 `context.rollback()`，把半截改动从内存里撤掉，避免脏对象被下一次保存带上；
+- 失败原因写入 `Documents/写入失败日志.txt`（带时间戳），并广播 `NotificationCenter` 通知；
+- 根视图挂 `.persistenceFailureBanner()`（`Ledger/App/PersistenceFailureBanner.swift`），顶部弹一条 4 秒提示：「「保存账单改动」没保存成功，已撤销这次改动 + 原因」。**用户能看见失败，就知道该重记。**
+
+全部 20 个文件、48 处替换完毕，剩下 1 处只出现在文档字符串里。真正需要抛错给上层的路径（`ImportService`、`EntrySheet.save`）保留 `do/catch`，`EntrySheet` 原本就会把错误显示在表单上、不 dismiss。
+
+**踩到的坑（值得记）**：把提示条直接写进 `RootTabView` 的 body 链，编译器报 `unable to type-check this expression in reasonable time`——根视图本来就是五层 ZStack + 十几个 modifier，再加一个复杂 HStack 就超时了。解法是把提示条抽成独立 `ViewModifier`（自带 `@State`、自己订阅通知），根视图只留一行 `.persistenceFailureBanner()`。**根视图的 body 链已经很满，以后往里加东西一律先抽 modifier。**
+
+### 21.2 加密备份：口令派生密钥，而不是把密钥存在 Keychain
+
+**取舍**：Keychain 存密钥只能防「别人拿到文件」，防不住「你自己换了手机 / 重装 / 系统重置」——那时备份等于废纸。所以改成**口令派生**：口令不进任何存储，可带走、可跨设备恢复。
+
+- KDF：PBKDF2-HMAC-SHA256，**21 万轮**（OWASP 2023 建议下限），随机 16 字节盐，每次导出新盐；真机派生约 0.2–0.4 秒
+- 加密：AES-GCM-256（CryptoKit），自带完整性校验，改一个字节就打不开
+- 信封：JSON（`format: "ledger-encrypted-backup"`，`envelopeVersion: 1`），外层只放条数摘要与导出时间——**够导入前预览「里面有什么」，够判断要不要输口令**，账目明细全部在密文里
+- 额外一层：明文 SHA-256 指纹写进信封，解密后再核对，防「能解开但内容被换」
+- 扩展名 `.ledgerbak`；`fileImporter` 同时接受 `.ledgerbak` / `.json` / 任意文件（`.data`），兼容旧备份与其它 App 转存
+
+**流程上的三个加固**：
+
+1. **导出后立刻自检**：`BackupService.verifyEncryptedFile` 把刚写出的文件读回来、解开、按 DTO 解析一遍，只有过了才说「已生成加密备份并自检通过」。交出去的文件必须是能打开的。
+2. **恢复前留副本，且同样加密**：用刚才解锁用的口令加密当前数据，避免为了「安全」反而在磁盘上多落一份明文。
+3. **恢复中途失败自动写回**：删完旧数据后写入新数据若失败，立即用内存里的原数据副本重写回去，抛 `restoreRolledBack`（提示「当前数据未改变」），不留「清空了但没写进去」的中间态。
+
+**兼容与迁移**：
+
+- 旧明文 `.json` 备份仍可导入，导入后提示「建议立刻重新导出一份加密备份」
+- 旧版 v1（`schemaVersion = 1`）继续只读兼容
+- 备份载荷本身仍是 `formatVersion 2` 的 DTO 结构，**没有改字段语义**，只多了一层信封
+
+**新增文件**：
+
+- `Ledger/Domain/Backup/BackupCrypto.swift`（信封结构 + KDF + 加解密 + 探测）
+- `Ledger/Features/Settings/BackupPassphraseSheet.swift`（口令面板：导出设口令 / 导入解锁；显示与确认、长度下限、二次输入）
+- `Ledger/Data/Store/PersistenceGuard.swift`
+- `Ledger/App/PersistenceFailureBanner.swift`
+- `LedgerTests/BackupCryptoTests.swift`（8 条）
+
+### 21.3 验证
+
+- 提交 `fdc90676fc5bdcc1a13ed5db93ae4ac4d8ba1fda`
+- CI run `46125964150`（job `140920516553`，`success`）；`Executed 199 tests, with 0 failures (0 unexpected)`（原 191 + 新增 8）
+- 新增 8 条覆盖：加解密往返一致、错误口令被拒、密文被改一个字节被拒、短口令直接拒、默认轮数是 210000 且盐 16 字节、明文备份仍可解且加密文件被正确识别、导出文件能被自检解开（错口令自检失败）、`PersistenceGuard` 保存成功路径
+- IPA `D:\开发\dist\Ledger-轻账-1.0.191.ipa`，4,560,372 bytes，SHA-256 `36E804116188D1C0C630F136E164F90A8D3F0A8B6D53E0697B58C565053BC34E`；artifact `Ledger-1.0.191-unsigned-ipa`（id `15255619127`）
+
+### 21.4 边界（没验到的部分，写清楚）
+
+- 加密备份**没有真机走通**：导出 → 分享到「文件」App → 重装 → 导入 → 输口令，这条链路、系统文件选择器对 `.ledgerbak` 的识别、口令面板的键盘遮挡，都需要 1.0.191 装机确认
+- 「导出自检」在真机上会多一次 21 万轮派生（约 0.3–0.5 秒），手感是否可接受要看实机
+- 写入失败的提示条只在根视图之上，**独立的 sheet 里（比如记账面板）看不到**；记账面板本身有自己的错误提示（表单内红字），其余 sheet 若保存失败，只能靠回到根视图后的提示与日志发现
+- 不变量测试（余额 = 期初 + 流水、净资产 = 资产 − 负债）仍未补，属于下一轮
+- 中途修了两次编译错误（`Int32` 与 `Int` 混用、`AES.GCM.seal` 会抛错、根视图类型推断超时），CI 序号 189/190 失败、191 通过，过程留痕在 Actions 里
+
+### 21.5 下一步顺序（按用户定的优先级）
+
+1. **硬性**：真机走通加密备份链路；补两条不变量测试（余额、净资产）；给独立 sheet 的保存失败加提示通道
+2. **功能**：按第 14 节路线图挑，优先「可配置导出」与「月报 PDF」
+3. **审美**：1.0.188 那批视觉项等截图回传后一次性收口（灰带、圆弧、Tab 手感、我的首屏比例）
