@@ -353,6 +353,7 @@ CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngi
 
 - **验证**：提交 `e4b6db916e8c27769f3e9f88fdd2f18f8e8fc948`（其下 `b8d3618` 为同一轮首批改动）；CI run `46119544933`（job `140900801015`，`success`）；`Executed 191 tests, with 0 failures (0 unexpected)`；IPA `D:\开发\dist\Ledger-轻账-1.0.187.ipa`，4,425,638 bytes，SHA-256 `7984E09B2BB45F5509B009E67736CA5995C9B25B19D0DB070A6B4645C02E94F5`；artifact `Ledger-1.0.187-unsigned-ipa`（id `15252992667`）。
 - **边界**：CI 只覆盖编译与单测；居中空状态、径向高光、阴影与遮罩时序需 **1.0.187 装机截图**确认；深色 / 大字体 / 小屏仍未验。
+  - 后续结论：1.0.187 截图判定「居中、FAB 对准」通过；径向高光与黑投影在 batch 49 被推翻并恢复为统一圆弧（见第 20 节）；遮罩时序在 1.0.188 继续收紧。
 
 ## 19. 导入真实数据前的检查清单
 
