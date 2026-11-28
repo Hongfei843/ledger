@@ -216,7 +216,7 @@ struct LoanDetailView: View {
             loan.status = .paidOff
         }
 
-        try? context.save()
+        PersistenceGuard.save(context, "更新贷款")
         refreshBalances()
         Haptics.success()
     }
@@ -224,7 +224,7 @@ struct LoanDetailView: View {
     private func refreshBalances() {
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         BalanceService.refreshAll(accounts: accounts, transactions: all)
-        try? context.save()
+        PersistenceGuard.save(context, "更新贷款")
     }
 
     // MARK: - 提前还款
@@ -369,7 +369,7 @@ struct LoanDetailView: View {
             }
         }
 
-        try? context.save()
+        PersistenceGuard.save(context, "更新贷款")
         refreshBalances()
         Haptics.success()
         showPrepay = false

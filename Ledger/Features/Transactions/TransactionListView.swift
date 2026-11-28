@@ -840,7 +840,7 @@ struct TransactionListView: View {
                 statements: statements
             )
         }
-        try? context.save()
+        PersistenceGuard.save(context, "账单操作")
         refreshBalances()
 
         deletedBuffer.append(contentsOf: removed)
@@ -863,7 +863,7 @@ struct TransactionListView: View {
         for accountId in creditAccountIds {
             StatementSettlementService.rebuild(accountId: accountId, transactions: transactions, statements: statements)
         }
-        try? context.save()
+        PersistenceGuard.save(context, "账单操作")
         refreshBalances()
         Haptics.success()
     }
@@ -871,7 +871,7 @@ struct TransactionListView: View {
     private func refreshBalances() {
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         BalanceService.refreshAll(accounts: accounts, transactions: all)
-        try? context.save()
+        PersistenceGuard.save(context, "账单操作")
     }
 }
 

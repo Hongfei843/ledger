@@ -97,7 +97,7 @@ struct DebtListView: View {
                             debt.isSettled = true
                             debt.settledAt = Date()
                             debt.updatedAt = Date()
-                            try? context.save()
+                            PersistenceGuard.save(context, "保存借入借出")
                             Haptics.success()
                         } label: {
                             Text("结清")
@@ -107,7 +107,7 @@ struct DebtListView: View {
                     Button(role: .destructive) {
                         debt.deletedAt = Date()
                         debt.updatedAt = Date()
-                        try? context.save()
+                        PersistenceGuard.save(context, "保存借入借出")
                     } label: {
                         Text("删除")
                     }
@@ -251,7 +251,7 @@ struct DebtEditView: View {
             context.insert(created)
         }
 
-        try? context.save()
+        PersistenceGuard.save(context, "保存借入借出")
         Haptics.success()
         dismiss()
     }

@@ -112,7 +112,7 @@ struct AccountEditView: View {
                         Button("恢复该账户") {
                             account.isArchived = false
                             account.updatedAt = Date()
-                            try? context.save()
+                            PersistenceGuard.save(context, "账户编辑")
                             Haptics.success()
                             dismiss()
                         }
@@ -139,7 +139,7 @@ struct AccountEditView: View {
                 Button("归档", role: .destructive) {
                     account?.isArchived = true
                     account?.updatedAt = Date()
-                    try? context.save()
+                    PersistenceGuard.save(context, "账户编辑")
                     dismiss()
                 }
                 Button("取消", role: .cancel) {}
@@ -150,7 +150,7 @@ struct AccountEditView: View {
                 Button("删除", role: .destructive) {
                     account?.deletedAt = Date()
                     account?.updatedAt = Date()
-                    try? context.save()
+                    PersistenceGuard.save(context, "账户编辑")
                     dismiss()
                 }
                 Button("取消", role: .cancel) {}
@@ -224,12 +224,12 @@ struct AccountEditView: View {
             context.insert(created)
         }
 
-        try? context.save()
+        PersistenceGuard.save(context, "账户编辑")
 
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
         BalanceService.refreshAll(accounts: accounts, transactions: all)
-        try? context.save()
+        PersistenceGuard.save(context, "账户编辑")
 
         Haptics.success()
         dismiss()

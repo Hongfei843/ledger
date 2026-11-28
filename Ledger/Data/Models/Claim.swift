@@ -159,6 +159,6 @@ enum ReimbursementSettlementService {
             context.insert(shortfall)
             didChange = true
         }
-        if didChange { try? context.save() }
+        if didChange { PersistenceGuard.save(context, "同步报销状态") }
     }
 }

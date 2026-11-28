@@ -110,7 +110,7 @@ struct BookManageView: View {
         )
         context.insert(book)
         SeedData.seedCategoriesIfNeeded(context: context, bookId: book.id)
-        try? context.save()
+        PersistenceGuard.save(context, "账本管理")
         BookScope.setCurrent(book.id)
         showNew = false
         Haptics.success()

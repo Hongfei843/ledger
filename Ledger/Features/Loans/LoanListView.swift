@@ -320,7 +320,7 @@ struct NewLoanSheet: View {
             context.insert(scheduleItem)
         }
 
-        try? context.save()
+        PersistenceGuard.save(context, "保存贷款")
         Haptics.success()
         dismiss()
     }

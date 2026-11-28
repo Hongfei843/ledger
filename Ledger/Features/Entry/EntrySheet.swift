@@ -699,7 +699,7 @@ struct EntrySheet: View {
             sortOrder: nextOrder
         )
         context.insert(template)
-        try? context.save()
+        PersistenceGuard.save(context, "保存记账改动")
         Haptics.success()
         templateName = ""
     }
@@ -861,7 +861,7 @@ struct EntrySheet: View {
     private func refreshBalances() {
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         BalanceService.refreshAll(accounts: accounts, transactions: all)
-        try? context.save()
+        PersistenceGuard.save(context, "保存记账改动")
     }
 
     // MARK: - 截图识别

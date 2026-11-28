@@ -1,10 +1,11 @@
 import Foundation
 
-/// 备份解码结果：带上格式版本与是否为旧版格式，便于 UI 提示。
+/// 备份解码结果：带上格式版本、是否为旧版格式与是否加密，便于 UI 提示。
 struct BackupDecodeResult {
     let backup: LedgerBackup
     let version: Int
     let isLegacy: Bool
+    var isEncrypted = false
 }
 
 /// 旧版备份（AI 分析包里的 07-backup.json，schemaVersion = 1）兼容读取。

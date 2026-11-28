@@ -175,7 +175,7 @@ struct OnboardingView: View {
             set: { value in
                 account.name = value
                 account.updatedAt = Date()
-                try? context.save()
+                PersistenceGuard.save(context, "初始化引导数据")
             }
         )
     }
@@ -207,7 +207,7 @@ struct OnboardingView: View {
             account.cachedBalanceMinor = signed
             account.updatedAt = Date()
         }
-        try? context.save()
+        PersistenceGuard.save(context, "初始化引导数据")
     }
 
     private var creditSettings: some View {
@@ -332,7 +332,7 @@ struct OnboardingView: View {
             context.insert(account)
             order += 1
         }
-        try? context.save()
+        PersistenceGuard.save(context, "初始化引导数据")
     }
 
     private func finishOnboarding() {
@@ -342,7 +342,7 @@ struct OnboardingView: View {
             account.dueDay = dueDay
             account.updatedAt = Date()
         }
-        try? context.save()
+        PersistenceGuard.save(context, "初始化引导数据")
         completed = true
         dismiss()
     }

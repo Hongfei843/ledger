@@ -34,14 +34,14 @@ struct RecurringListView: View {
                         Button(role: .destructive) {
                             rule.deletedAt = Date()
                             rule.updatedAt = Date()
-                            try? context.save()
+                            PersistenceGuard.save(context, "周期记账")
                         } label: {
                             Text("删除")
                         }
                         Button {
                             rule.isPaused.toggle()
                             rule.updatedAt = Date()
-                            try? context.save()
+                            PersistenceGuard.save(context, "周期记账")
                         } label: {
                             Text(rule.isPaused ? "启用" : "暂停")
                         }
@@ -256,7 +256,7 @@ struct RecurringEditView: View {
             context.insert(created)
         }
 
-        try? context.save()
+        PersistenceGuard.save(context, "周期记账")
         Haptics.success()
         dismiss()
     }

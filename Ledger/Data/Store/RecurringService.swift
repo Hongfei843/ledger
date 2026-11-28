@@ -72,7 +72,7 @@ enum RecurringService {
             result.ruleTitles.append(rule.title)
         }
 
-        try? context.save()
+        PersistenceGuard.save(context, "补记周期记账")
 
         if !touchedAccounts.isEmpty {
             let latest = (try? context.fetch(FetchDescriptor<Txn>())) ?? txns
@@ -85,7 +85,7 @@ enum RecurringService {
                 )
             }
             BalanceService.refreshAll(accounts: accounts, transactions: latest)
-            try? context.save()
+            PersistenceGuard.save(context, "补记周期记账")
         }
 
         return result

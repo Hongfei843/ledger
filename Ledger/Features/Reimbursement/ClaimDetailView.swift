@@ -188,14 +188,14 @@ struct ClaimDetailView: View {
         claim.status = .submitted
         claim.submittedAt = Date()
         claim.updatedAt = Date()
-        try? context.save()
+        PersistenceGuard.save(context, "报销单操作")
         Haptics.success()
     }
 
     private func close() {
         claim.status = .closed
         claim.updatedAt = Date()
-        try? context.save()
+        PersistenceGuard.save(context, "报销单操作")
         Haptics.warning()
     }
 

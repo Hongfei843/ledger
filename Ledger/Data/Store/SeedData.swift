@@ -91,7 +91,7 @@ enum SeedData {
         context.insert(debit)
         context.insert(credit)
 
-        try? context.save()
+        PersistenceGuard.save(context, "写入默认数据")
     }
 
     private static func insertCategories(
@@ -147,6 +147,6 @@ enum SeedData {
             order += 1
         }
 
-        try? context.save()
+        PersistenceGuard.save(context, "写入默认数据")
     }
 }

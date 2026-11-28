@@ -50,7 +50,7 @@ struct CategoryManageView: View {
                             Button("恢复") {
                                 category.isArchived = false
                                 category.updatedAt = Date()
-                                try? context.save()
+                                PersistenceGuard.save(context, "分类管理")
                             }
                             .font(.caption)
                         }
@@ -129,7 +129,7 @@ struct CategoryManageView: View {
                     Button(role: .destructive) {
                         category.isArchived = true
                         category.updatedAt = Date()
-                        try? context.save()
+                        PersistenceGuard.save(context, "分类管理")
                     } label: {
                         Text("归档")
                     }
@@ -230,7 +230,7 @@ struct CategoryEditSheet: View {
             )
             context.insert(created)
         }
-        try? context.save()
+        PersistenceGuard.save(context, "分类管理")
         Haptics.success()
         dismiss()
     }

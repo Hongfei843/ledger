@@ -201,7 +201,7 @@ struct ClaimListView: View {
         }
         let claim = Claim(bookId: bookId, title: "\(monthKey) 报销", periodMonth: monthKey)
         context.insert(claim)
-        try? context.save()
+        PersistenceGuard.save(context, "报销单")
         Haptics.success()
     }
 }

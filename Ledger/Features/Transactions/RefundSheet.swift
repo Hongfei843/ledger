@@ -107,7 +107,7 @@ struct RefundSheet: View {
         )
         txn.refundOfTxnId = original.id
         context.insert(txn)
-        try? context.save()
+        PersistenceGuard.save(context, "保存退款")
         refreshBalances()
         Haptics.success()
         dismiss()
@@ -116,6 +116,6 @@ struct RefundSheet: View {
     private func refreshBalances() {
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         BalanceService.refreshAll(accounts: accounts, transactions: all)
-        try? context.save()
+        PersistenceGuard.save(context, "保存退款")
     }
 }

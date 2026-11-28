@@ -386,11 +386,11 @@ struct TxnDetailView: View {
                 statements: statements
             )
         }
-        try? context.save()
+        PersistenceGuard.save(context, "保存账单改动")
 
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         BalanceService.refreshAll(accounts: accounts, transactions: all)
-        try? context.save()
+        PersistenceGuard.save(context, "保存账单改动")
 
         Haptics.warning()
         dismiss()

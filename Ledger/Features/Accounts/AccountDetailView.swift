@@ -326,7 +326,7 @@ struct CreditCardSettingsSheet: View {    let account: Account
         account.billDay = billDay
         account.dueDay = dueDay
         account.updatedAt = Date()
-        try? context.save()
+        PersistenceGuard.save(context, "账户操作")
         Haptics.success()
         dismiss()
     }
@@ -410,7 +410,7 @@ struct StatementEntrySheet: View {
             transactions: allTxns,
             statements: statements.filter { $0.id != statement.id } + [statement]
         )
-        try? context.save()
+        PersistenceGuard.save(context, "账户操作")
         Haptics.success()
         dismiss()
     }
@@ -502,12 +502,12 @@ struct StatementRepaySheet: View {
             transactions: allTxns.filter { $0.id != transfer.id } + [transfer],
             statements: statements
         )
-        try? context.save()
+        PersistenceGuard.save(context, "账户操作")
 
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         let allAccounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
         BalanceService.refreshAll(accounts: allAccounts, transactions: all)
-        try? context.save()
+        PersistenceGuard.save(context, "账户操作")
 
         Haptics.success()
         dismiss()

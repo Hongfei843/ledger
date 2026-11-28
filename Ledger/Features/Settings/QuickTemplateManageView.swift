@@ -37,7 +37,7 @@ struct QuickTemplateListView: View {
                         Button(role: .destructive) {
                             template.deletedAt = Date()
                             template.updatedAt = Date()
-                            try? context.save()
+                            PersistenceGuard.save(context, "常用组合")
                         } label: {
                             Text("删除")
                         }
@@ -243,7 +243,7 @@ struct QuickTemplateEditView: View {
             context.insert(created)
         }
 
-        try? context.save()
+        PersistenceGuard.save(context, "常用组合")
         Haptics.success()
         dismiss()
     }

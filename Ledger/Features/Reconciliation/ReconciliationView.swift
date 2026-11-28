@@ -229,12 +229,12 @@ struct ReconciliationView: View {
             context.insert(run)
         }
 
-        try? context.save()
+        PersistenceGuard.save(context, "保存对账结果")
 
         let all = (try? context.fetch(FetchDescriptor<Txn>())) ?? []
         let accounts = (try? context.fetch(FetchDescriptor<Account>())) ?? []
         BalanceService.refreshAll(accounts: accounts, transactions: all)
-        try? context.save()
+        PersistenceGuard.save(context, "保存对账结果")
 
         inputs = [:]
         message = adjusted == 0 ? "账面与实际全部一致，对账时间已更新" : "已校准 \(adjusted) 个账户"

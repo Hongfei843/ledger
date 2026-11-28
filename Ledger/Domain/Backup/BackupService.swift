@@ -80,6 +80,8 @@ struct BackupCounts: Codable, Equatable {
 enum BackupError: LocalizedError {
     case unsupportedVersion(Int)
     case invalidFormat
+    case encryptedNeedsPassphrase
+    case restoreRolledBack(underlying: String)
 
     var errorDescription: String? {
         switch self {
@@ -87,15 +89,25 @@ enum BackupError: LocalizedError {
             return "备份格式版本 \(version) 与当前 App 不兼容，请升级 App 或重新导出备份。"
         case .invalidFormat:
             return "备份文件格式不正确，无法读取。"
+        case .encryptedNeedsPassphrase:
+            return "这是加密备份，需要输入导出时设置的口令。"
+        case .restoreRolledBack(let underlying):
+            return "恢复过程中写入失败，已把原数据写回，当前数据未改变。（\(underlying)）"
         }
     }
 }
 
-/// 完整备份与恢复。备份文件是带版本号的 JSON，恢复前会自动留下当前数据的副本。
+/// 完整备份与恢复。
+///
+/// 备份文件默认是**口令加密**的 `.ledgerbak`：口令经 PBKDF2-HMAC-SHA256（21 万轮）派生密钥，
+/// 内容用 AES-GCM-256 加密，改一个字节都打不开；口令不存钥匙串、可跨设备带走。
+/// 历史明文 `.json` 备份仍然能读（`decodeDetailed` 会按内容自动识别）。
 enum BackupService {
     static let formatVersion = 2
     static let lastBackupKey = "backup.lastExportAt"
     static let lastRestoreKey = "backup.lastRestoreAt"
+    /// 加密备份的扩展名；导入时同时允许 .ledgerbak / .json / 无扩展名（其它 App 转存常见）
+    static let encryptedExtension = "ledgerbak"
 
     // MARK: - 导出
 
@@ -132,8 +144,19 @@ enum BackupService {
         try decodeDetailed(data).backup
     }
 
-    /// 宽容解码：支持当前/更早格式，以及旧版（schemaVersion = 1）备份。
-    static func decodeDetailed(_ data: Data) throws -> BackupDecodeResult {
+    /// 宽容解码：支持当前/更早格式、旧版（schemaVersion = 1）备份，以及加密信封。
+    /// 传入 `passphrase` 才能解开加密备份；不给口令时对加密文件抛 `encryptedNeedsPassphrase`。
+    static func decodeDetailed(_ data: Data, passphrase: String? = nil) throws -> BackupDecodeResult {
+        if let envelope = BackupCrypto.envelope(in: data) {
+            guard let passphrase, !passphrase.isEmpty else {
+                throw BackupError.encryptedNeedsPassphrase
+            }
+            let plaintext = try BackupCrypto.open(envelope, passphrase: passphrase)
+            var result = try decodeDetailed(plaintext)
+            result.isEncrypted = true
+            return result
+        }
+
         if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            object["formatVersion"] == nil,
            object["schemaVersion"] is Int {
@@ -155,7 +178,24 @@ enum BackupService {
         return BackupDecodeResult(backup: backup, version: backup.formatVersion, isLegacy: false)
     }
 
-    /// 生成临时备份文件，供 ShareLink 分享。
+    /// 生成临时加密备份文件，供 ShareLink 分享。
+    static func writeFile(_ backup: LedgerBackup, passphrase: String, directory: URL? = nil, now: Date = Date()) throws -> URL {
+        let folder = directory ?? FileManager.default.temporaryDirectory
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appendingPathComponent("轻账备份-\(fileNameStamp(now)).\(encryptedExtension)")
+        let counts = BackupCounts(backup: backup)
+        let envelope = try BackupCrypto.seal(
+            encode(backup),
+            passphrase: passphrase,
+            counts: counts,
+            summary: counts.summaryText,
+            exportedAt: now
+        )
+        try encodeEnvelope(envelope).write(to: url, options: .atomic)
+        return url
+    }
+
+    /// 明文备份（仅保留给兼容路径与测试用；界面一律走加密版本）。
     static func writeFile(_ backup: LedgerBackup, directory: URL? = nil, now: Date = Date()) throws -> URL {
         let folder = directory ?? FileManager.default.temporaryDirectory
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -164,22 +204,88 @@ enum BackupService {
         return url
     }
 
+    static func encodeEnvelope(_ envelope: BackupEnvelope) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return try encoder.encode(envelope)
+    }
+
+    /// 导出后自检：把刚写出的文件读回来、解开、按真实 DTO 解析一遍。
+    /// 只有这一步过了，界面才敢说「备份已生成」——否则可能交出去一个打不开的文件。
+    static func verifyEncryptedFile(at url: URL, passphrase: String) throws -> LedgerBackup {
+        let data = try Data(contentsOf: url)
+        return try decodeDetailed(data, passphrase: passphrase).backup
+    }
+
     // MARK: - 恢复
 
     /// 恢复备份：先删除全部本地数据，再写入备份内容。恢复前自动保存当前数据副本。
+    ///
+    /// 写入分两步落盘（清空 → 写入），任一步失败都不会留下「清空了但没写进去」的半截状态：
+    /// 第一步失败直接抛错，数据仍在；第二步失败会把内存里的原数据副本原样写回再抛错。
     @MainActor
     @discardableResult
-    static func restore(_ backup: LedgerBackup, into context: ModelContext, autoBackupDirectory: URL? = nil) throws -> (counts: BackupCounts, autoBackupURL: URL?) {
+    static func restore(
+        _ backup: LedgerBackup,
+        into context: ModelContext,
+        autoBackupDirectory: URL? = nil,
+        passphrase: String? = nil
+    ) throws -> (counts: BackupCounts, autoBackupURL: URL?) {
         // v1 与 v2 的 DTO 结构兼容，decodeDetailed 已做宽容升级；这里不能再把 v1 挡在恢复门外。
         guard (1...formatVersion).contains(backup.formatVersion) else {
             throw BackupError.unsupportedVersion(backup.formatVersion)
         }
 
-        let autoBackupURL = try writeAutoBackupBeforeRestore(context: context, directory: autoBackupDirectory)
+        // 1) 先留副本：有口令就加密留，没有口令退化为明文（明文也比没有强）
+        let currentBackup = try makeBackup(context: context)
+        let autoBackupURL = try writeAutoBackupBeforeRestore(currentBackup, directory: autoBackupDirectory, passphrase: passphrase)
 
+        // 2) 清空落盘：这一步失败等于什么都没做，数据仍然完整
         try deleteAll(in: context)
-        try context.save()
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
+        }
 
+        // 3) 写入新数据：失败则把原数据写回，不留中间态
+        do {
+            insert(backup, into: context)
+            try context.save()
+        } catch {
+            context.rollback()
+            let recoveryError = recover(currentBackup, into: context)
+            let underlying: String
+            if let recoveryError {
+                underlying = "\(error.localizedDescription)；写回原数据也失败了：\(recoveryError.localizedDescription)"
+            } else {
+                underlying = error.localizedDescription
+            }
+            throw BackupError.restoreRolledBack(underlying: underlying)
+        }
+
+        // 4) 恢复可能带来另一组账本 ID，立即修正当前账本，避免界面看起来像“数据消失”。
+        let restoredBooks = try context.fetch(FetchDescriptor<Book>())
+        let liveBooks = restoredBooks.filter { $0.deletedAt == nil }
+        if let current = BookScope.currentId, liveBooks.contains(where: { $0.id == current }) {
+            // 保留仍然有效的选择。
+        } else {
+            BookScope.setCurrent(liveBooks.first(where: { $0.isDefault })?.id ?? liveBooks.first?.id)
+        }
+
+        // 5) 用恢复后的数据重算账户余额缓存
+        let accounts = try context.fetch(FetchDescriptor<Account>())
+        let txns = try context.fetch(FetchDescriptor<Txn>())
+        BalanceService.refreshAll(accounts: accounts, transactions: txns)
+        PersistenceGuard.save(context, "恢复后刷新余额")
+
+        return (BackupCounts(backup: backup), autoBackupURL)
+    }
+
+    @MainActor
+    private static func insert(_ backup: LedgerBackup, into context: ModelContext) {
         for dto in backup.books { context.insert(dto.makeModel()) }
         for dto in backup.accounts { context.insert(dto.makeModel()) }
         for dto in backup.categories { context.insert(dto.makeModel()) }
@@ -198,34 +304,42 @@ enum BackupService {
         if backup.books.isEmpty {
             context.insert(Book())
         }
+    }
 
-        try context.save()
-
-        // 恢复可能带来另一组账本 ID，立即修正当前账本，避免界面看起来像“数据消失”。
-        let restoredBooks = try context.fetch(FetchDescriptor<Book>())
-        let liveBooks = restoredBooks.filter { $0.deletedAt == nil }
-        if let current = BookScope.currentId, liveBooks.contains(where: { $0.id == current }) {
-            // 保留仍然有效的选择。
-        } else {
-            BookScope.setCurrent(liveBooks.first(where: { $0.isDefault })?.id ?? liveBooks.first?.id)
+    /// 写入失败后的紧急写回：把恢复前的内存副本重新落盘。返回 nil 表示写回成功。
+    @MainActor
+    private static func recover(_ backup: LedgerBackup, into context: ModelContext) -> Error? {
+        do {
+            try deleteAll(in: context)
+            insert(backup, into: context)
+            try context.save()
+            return nil
+        } catch {
+            return error
         }
-
-        // 用恢复后的数据重算账户余额缓存
-        let accounts = try context.fetch(FetchDescriptor<Account>())
-        let txns = try context.fetch(FetchDescriptor<Txn>())
-        BalanceService.refreshAll(accounts: accounts, transactions: txns)
-        try context.save()
-
-        return (BackupCounts(backup: backup), autoBackupURL)
     }
 
     @MainActor
-    private static func writeAutoBackupBeforeRestore(context: ModelContext, directory: URL?) throws -> URL? {
-        let current = try makeBackup(context: context)
+    private static func writeAutoBackupBeforeRestore(_ current: LedgerBackup, directory: URL?, passphrase: String?) throws -> URL? {
         guard current.accounts.count + current.txns.count + current.categories.count > 0 else { return nil }
 
         let folder = directory ?? autoBackupFolder()
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        if let passphrase, !passphrase.isEmpty {
+            let name = "恢复前自动备份-\(fileNameStamp(Date())).\(encryptedExtension)"
+            let counts = BackupCounts(backup: current)
+            let envelope = try BackupCrypto.seal(
+                encode(current),
+                passphrase: passphrase,
+                counts: counts,
+                summary: counts.summaryText
+            )
+            let url = folder.appendingPathComponent(name)
+            try encodeEnvelope(envelope).write(to: url, options: .atomic)
+            return url
+        }
+
         let url = folder.appendingPathComponent("恢复前自动备份-\(fileNameStamp(Date())).json")
         try encode(current).write(to: url, options: .atomic)
         return url
