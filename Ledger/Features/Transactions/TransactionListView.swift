@@ -172,123 +172,10 @@ struct TransactionListView: View {
                 ZStack(alignment: .bottomTrailing) {
                     VStack(spacing: 0) {
                         homeHeader()
-
-                    List {
-                        if !dueReminders.isEmpty {
-                        Section {
-                            ForEach(dueReminders) { item in
-                                NavigationLink {
-                                    reminderDestination(item)
-                                } label: {
-                                    reminderRow(item)
-                                }
-                            }
-                        } header: {
-                            Text("即将到期")
-                        }
+                        contentArea
                     }
 
-                    if !staleAccounts.isEmpty {
-                        Section {
-                            NavigationLink {
-                                ReconciliationView()
-                            } label: {
-                                HStack(spacing: Theme.Spacing.s) {
-                                    Image(systemName: "exclamationmark.circle")
-                                        .foregroundStyle(Theme.warning)
-                                    Text("有 \(staleAccounts.count) 个账户超过 30 天未对账")
-                                        .font(.subheadline)
-                                    Spacer()
-                                    Text("去对账")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-
-                    if groups.isEmpty {
-                        Section {
-                            emptyState
-                                .listRowBackground(Color.clear)
-                        }
-                    } else {
-                        ForEach(groups) { group in
-                            Section {
-                                ForEach(group.items, id: \.id) { txn in
-                                    NavigationLink {
-                                        TxnDetailView(txn: txn)
-                                    } label: {
-                                        TxnRow(
-                                            txn: txn,
-                                            category: category(for: txn),
-                                            accountName: accountName(for: txn),
-                                            refundedMinor: refundedByTxnId[txn.id] ?? 0
-                                        )
-                                    }
-                                    .swipeActions(edge: .leading) {
-                                        if txn.canEditInEntrySheet {
-                                            Button {
-                                                editingTxn = txn
-                                            } label: {
-                                                Text("编辑")
-                                            }
-                                            .tint(Theme.accent)
-                                        }
-                                    }
-                                    .swipeActions(edge: .trailing) {
-                                        if txn.canDeleteFromTransactionList {
-                                            Button(role: .destructive) {
-                                                delete(txn)
-                                            } label: {
-                                                Label("删除", systemImage: "trash")
-                                            }
-                                        }
-                                    }
-                                }
-                            } header: {
-                                HStack {
-                                    Text(AppCalendar.dayTitle(group.day))
-                                    Spacer()
-                                    if group.expenseMinor > 0 {
-                                        Text("支出 \(Money.format(group.expenseMinor))")
-                                    }
-                                }
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    }
-                    .listStyle(.insetGrouped)
-                    .scrollContentBackground(.hidden)
-                    .background(Theme.pageBackground)
-                    .listSectionSpacing(14)
-                    .contentMargins(.top, 0, for: .scrollContent)
-                    // 最后一笔流水不应被悬浮按钮盖住。
-                    .contentMargins(.bottom, Theme.Layout.fabClearance, for: .scrollContent)
-                }
-
-                Button {
-                    showEntry = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 17, weight: .bold))
-                        Text("记一笔")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 22)
-                    .frame(height: 56)
-                    .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
-                    .shadow(color: Theme.accent.opacity(0.18), radius: 12, y: 5)
-                }
-                .buttonStyle(SoftPressButtonStyle())
-                .padding(.trailing, Theme.Spacing.xl)
-                // 真机反馈表明 safeAreaInset 未把 NavigationStack 内的悬浮按钮抬起来，
-                // 这里显式叠加 Tab 栏高度，确保按钮完整露在 Tab 栏上方。
-                .padding(.bottom, Theme.Layout.tabBarHeight + Theme.Spacing.m)
+                    entryButton
                 }
             }
             .overlay(alignment: .top) {
@@ -316,7 +203,7 @@ struct TransactionListView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
-            .navigationBarHidden(true)
+            .toolbar(.hidden, for: .navigationBar)
             .onChange(of: screenshotItem) { _, item in
                 guard let item else { return }
                 isScreenshotBusy = true
@@ -366,6 +253,145 @@ struct TransactionListView: View {
         }
     }
 
+    // MARK: - 内容区
+
+    /// 有提醒或流水时走列表；整页为空时把空状态垂直居中在剩余空间里。
+    /// 上一版把空状态塞在 List 顶部，卡片下面会留一大片空白、视觉重心全部压在屏幕上半部分。
+    @ViewBuilder
+    private var contentArea: some View {
+        if groups.isEmpty && dueReminders.isEmpty && staleAccounts.isEmpty {
+            VStack(spacing: 0) {
+                Spacer(minLength: Theme.Spacing.xl)
+                emptyState
+                Spacer(minLength: Theme.Spacing.xxl)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.bottom, Theme.Layout.tabBarHeight)
+        } else {
+            transactionList
+        }
+    }
+
+    private var transactionList: some View {
+        List {
+            if !dueReminders.isEmpty {
+                Section {
+                    ForEach(dueReminders) { item in
+                        NavigationLink {
+                            reminderDestination(item)
+                        } label: {
+                            reminderRow(item)
+                        }
+                    }
+                } header: {
+                    Text("即将到期")
+                }
+            }
+
+            if !staleAccounts.isEmpty {
+                Section {
+                    NavigationLink {
+                        ReconciliationView()
+                    } label: {
+                        HStack(spacing: Theme.Spacing.s) {
+                            Image(systemName: "exclamationmark.circle")
+                                .foregroundStyle(Theme.warning)
+                            Text("有 \(staleAccounts.count) 个账户超过 30 天未对账")
+                                .font(.subheadline)
+                            Spacer()
+                            Text("去对账")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+            if groups.isEmpty {
+                Section {
+                    emptyState
+                        .listRowBackground(Color.clear)
+                }
+            } else {
+                ForEach(groups) { group in
+                    Section {
+                        ForEach(group.items, id: \.id) { txn in
+                            NavigationLink {
+                                TxnDetailView(txn: txn)
+                            } label: {
+                                TxnRow(
+                                    txn: txn,
+                                    category: category(for: txn),
+                                    accountName: accountName(for: txn),
+                                    refundedMinor: refundedByTxnId[txn.id] ?? 0
+                                )
+                            }
+                            .swipeActions(edge: .leading) {
+                                if txn.canEditInEntrySheet {
+                                    Button {
+                                        editingTxn = txn
+                                    } label: {
+                                        Text("编辑")
+                                    }
+                                    .tint(Theme.accent)
+                                }
+                            }
+                            .swipeActions(edge: .trailing) {
+                                if txn.canDeleteFromTransactionList {
+                                    Button(role: .destructive) {
+                                        delete(txn)
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Text(AppCalendar.dayTitle(group.day))
+                            Spacer()
+                            if group.expenseMinor > 0 {
+                                Text("支出 \(Money.format(group.expenseMinor))")
+                            }
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Theme.pageBackground)
+        .listSectionSpacing(14)
+        .contentMargins(.top, 0, for: .scrollContent)
+        // 悬浮按钮浮在内容之上，列表底部要留出「按钮底边 + 按钮高度 + 呼吸」的总高度。
+        .contentMargins(.bottom, Theme.Layout.fabClearance, for: .scrollContent)
+    }
+
+    private var entryButton: some View {
+        Button {
+            showEntry = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .bold))
+                Text("记一笔")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 22)
+            .frame(height: 56)
+            .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+            .shadow(color: Theme.accent.opacity(0.20), radius: 14, y: 6)
+        }
+        .buttonStyle(SoftPressButtonStyle())
+        // 与 Tab 栏外缘对齐，避免悬浮按钮比底栏更靠里、看起来没对齐。
+        .padding(.trailing, Theme.Spacing.m)
+        // 真机截图已确认：页面铺满到屏幕底部，按钮需显式抬高一个 Tab 栏高度。
+        .padding(.bottom, Theme.Layout.fabBottomOffset)
+    }
+
     // MARK: - 自定义顶部栏
 
     private func topBar() -> some View {
@@ -375,14 +401,17 @@ struct TransactionListView: View {
             trailingToolbar
         }
         .padding(.horizontal, Theme.Spacing.m)
-        .frame(height: 52)
+        .frame(height: 56)
         .background(Theme.pageBackground)
         .overlay {
-            Text("明细")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .allowsHitTesting(false)
+            // 自定义区间时左侧胶囊会变宽，居中的「明细」会和它叠在一起，这种状态只保留区间标题。
+            if period.kind != .custom {
+                Text("明细")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -547,7 +576,7 @@ struct TransactionListView: View {
             monthSummaryCard()
                 .padding(.horizontal, Theme.Spacing.l)
         }
-        .padding(.top, Theme.Spacing.xs)
+        .padding(.top, Theme.Spacing.s)
         .padding(.bottom, Theme.Spacing.s)
         // 与列表使用完全相同的纯色背景，不叠加渐变，避免出现横向色带。
         .background(Theme.pageBackground)
@@ -607,13 +636,17 @@ struct TransactionListView: View {
         }
         .padding(Theme.Spacing.xl)
         .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(alignment: .topTrailing) {
-            Circle()
-                .fill(.white.opacity(0.07))
-                .frame(width: 150, height: 150)
-                .offset(x: 54, y: -64)
+        .overlay {
+            // 顶部右侧的高光改成无硬边的径向渐变：原来的实心圆在渐变底色上会露出一道弧形接缝。
+            RadialGradient(
+                colors: [.white.opacity(0.10), .white.opacity(0.03), .clear],
+                center: .topTrailing,
+                startRadius: 0,
+                endRadius: 260
+            )
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: .black.opacity(0.10), radius: 18, y: 10)
     }
 
     private func heroMetric(title: String, value: String) -> some View {

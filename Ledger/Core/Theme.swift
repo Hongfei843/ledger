@@ -65,8 +65,11 @@ enum Theme {
         static let tabBarHeight: CGFloat = 68
         /// 顶部工具栏胶囊高度，左侧周期控件与右侧操作组保持一致。
         static let toolbarControlHeight: CGFloat = 36
-        /// 列表底部为悬浮按钮预留的空间：Tab 栏 68 + 按钮 56 + 呼吸空间。
-        static let fabClearance: CGFloat = 140
+        /// 悬浮按钮底边到屏幕底部的距离。
+        /// `safeAreaInset` 只压缩滚动内容的安全区，页面本身仍铺到屏幕底部，所以这里必须显式叠加 Tab 栏高度。
+        static let fabBottomOffset: CGFloat = tabBarHeight + Theme.Spacing.l
+        /// 列表底部留白：按钮底边 + 按钮 56 + 28 呼吸，保证最后一笔流水不被按钮压住。
+        static let fabClearance: CGFloat = fabBottomOffset + 84
     }
 
     /// 字号规范：金额三档（26 / 17 / 13），统一圆体；等宽数字在调用处加 .monospacedDigit()
@@ -230,7 +233,7 @@ private struct ToolbarCapsuleStyle: ViewModifier {
             .background(Theme.cardBackground.opacity(0.92), in: Capsule())
             .overlay(
                 Capsule()
-                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                    .strokeBorder(Color.primary.opacity(0.09), lineWidth: 0.5)
             )
             .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
     }
@@ -276,7 +279,7 @@ struct PremiumEmptyState: View {
 
     var body: some View {
         VStack(spacing: Theme.Spacing.l) {
-            LedgerIconBadge(systemImage: systemImage, tint: .secondary, size: 56)
+            LedgerIconBadge(systemImage: systemImage, tint: Theme.accent, size: 56)
             VStack(spacing: Theme.Spacing.s) {
                 Text(title)
                     .font(.system(size: 18, weight: .semibold, design: .rounded))

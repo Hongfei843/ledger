@@ -79,6 +79,10 @@ struct RootTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var unlocked = false
     @State private var showPrivacyShield = false
+    /// 上一次的 scenePhase：用来判断这次 .inactive 是「要走后台」还是「刚从后台回来」。
+    @State private var previousPhase: ScenePhase = .background
+    /// 进程启动后是否已经真正到过前台。冷启动那次 .inactive 不需要遮罩。
+    @State private var hasActivatedOnce = false
 
     @State private var showOnboarding = false
     @State private var showQuickEntry = false
@@ -151,18 +155,10 @@ struct RootTabView: View {
         .overlay {
             if showPrivacyShield {
                 PrivacyShieldView()
-                    .transition(.opacity)
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            // 切到后台/任务切换器时用不透明遮罩盖住内容，避免被截图
-            showPrivacyShield = phase != .active
-            if phase == .background {
-                unlocked = false
-            }
-            if phase == .active {
-                takePendingScreenshotDraft()
-            }
+            handleScenePhase(phase)
         }
         .onChange(of: showOnboarding) { _, showing in
             if !showing { takePendingScreenshotDraft() }
@@ -234,6 +230,33 @@ struct RootTabView: View {
             try? await Task.sleep(nanoseconds: 600_000_000)
             takePendingScreenshotDraft()
         }
+    }
+
+    // MARK: - 前后台与隐私遮罩
+
+    /// 隐私遮罩只在「确实要离开前台」时出现：
+    /// 1) 冷启动时系统会先给一次 .inactive，这时屏幕上还没有账目，不再弹遮罩（消除开机闪一下「内容已隐藏」）；
+    /// 2) 从后台回来时，系统同样先给一次 .inactive，但此时隐私快照已经拍完，直接撤掉遮罩，不再多留半秒。
+    private func handleScenePhase(_ phase: ScenePhase) {
+        switch phase {
+        case .active:
+            hasActivatedOnce = true
+            showPrivacyShield = false
+            takePendingScreenshotDraft()
+        case .inactive:
+            if previousPhase == .background {
+                showPrivacyShield = false
+            } else if hasActivatedOnce {
+                // 正在被系统盖住（任务切换器 / 通知中心 / 锁屏），先遮住再让系统截图
+                showPrivacyShield = true
+            }
+        case .background:
+            showPrivacyShield = true
+            unlocked = false
+        @unknown default:
+            break
+        }
+        previousPhase = phase
     }
 
     // MARK: - 快速启动（长按桌面图标）

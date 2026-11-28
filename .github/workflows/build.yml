@@ -131,7 +131,8 @@ jobs:
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Ledger-unsigned-ipa
+          # 产物名带构建版本号，避免多次构建的 zip 在 Actions 页面里分不清先后
+          name: Ledger-1.0.${{ github.run_number }}-unsigned-ipa
           path: dist/Ledger-unsigned.ipa
           if-no-files-found: error
           retention-days: 90
