@@ -311,3 +311,13 @@ CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngi
 - **字体层级**：空状态标题 18pt 圆体 semibold、正文 13pt + 4pt 行距；流水主标题 14pt、副标题 `.caption`；分组标题使用 `.caption.weight(.medium)`。
 - **验证**：提交 `6aee6ab580c0fec0cc39debd50fdba7e37a20496`；CI run `45970833534` 成功；`Executed 191 tests, with 0 failures (0 unexpected)`；IPA `D:\开发\dist\Ledger-轻账-视觉统一-6aee6ab.ipa`，4,399,337 bytes，SHA-256 `C8005E75BC8442E6D28516B0F3EC09DC62E4C26B21FB1DC80FFA7B88767B5D05`。
 - **边界**：CI 只覆盖编译与单测；周期比例、Tab/FAB 避让、背景过渡及深色/大字体/小屏仍需真机确认。
+
+## 17. 真机反馈返工（batch 47）
+
+上一轮装机截图显示 batch 46 的三个视觉问题未真正消除，本轮按截图返工：
+
+- **双层边框**：移除系统 `NavigationStack.toolbar` 与 `.navigationTitle`，周期控件和截图/搜索操作改为页面内自绘视图，避免系统为两个 ToolbarItem 各自加边框。
+- **背景断层**：主卡与流水列表合并为同一 `Theme.pageBackground` 纯色，去掉主卡下方渐隐层与投影。
+- **悬浮按钮**：「记一笔」相对 Tab 栏显式抬高 80pt，列表底部留白同步增大，Tab 栏仍由 `safeAreaInset` 占位。
+- **验证**：提交 `e326f7538f15bd59014b984f2ab1b7bf2aede93d`；CI run `45976460664` 成功；`Executed 191 tests, with 0 failures (0 unexpected)`；IPA `D:\开发\dist\Ledger-轻账-去除双层边框-e326f75.ipa`，4,412,050 bytes，SHA-256 `A50C074F7DAD576221AE9000DB8114DA6751CD4665D475E7C8F6E912FAED115A`。
+- **边界**：CI 只覆盖编译与单测；三项视觉问题与深色/大字体/小屏仍以装机截图为最终验收口径。
