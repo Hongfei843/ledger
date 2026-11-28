@@ -89,12 +89,12 @@ enum BackupCrypto {
         var saltBytes = [UInt8](repeating: 0, count: 16)
         let saltStatus = SecRandomCopyBytes(kSecRandomDefault, saltBytes.count, &saltBytes)
         guard saltStatus == errSecSuccess else {
-            throw BackupCryptoError.keyDerivationFailed(Int(saltStatus))
+            throw BackupCryptoError.keyDerivationFailed(saltStatus)
         }
         let salt = Data(saltBytes)
 
         let key = try derivedKey(passphrase: trimmed, salt: salt, rounds: rounds)
-        let sealed = AES.GCM.seal(plaintext, using: key)
+        let sealed = try AES.GCM.seal(plaintext, using: key)
 
         return BackupEnvelope(
             format: format,
@@ -183,7 +183,7 @@ enum BackupCrypto {
             }
         }
         guard Int(status) == kCCSuccess else {
-            throw BackupCryptoError.keyDerivationFailed(Int(status))
+            throw BackupCryptoError.keyDerivationFailed(status)
         }
         return SymmetricKey(data: keyBytes)
     }
