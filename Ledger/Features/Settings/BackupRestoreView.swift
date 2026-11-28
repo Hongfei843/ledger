@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 /// 保证交到用户手里的文件是真能打开的；历史明文 JSON 备份仍可直接导入。
 struct BackupRestoreView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
     @Query private var accounts: [Account]
     @Query private var txns: [Txn]
     @Query private var loans: [Loan]
@@ -21,10 +22,21 @@ struct BackupRestoreView: View {
     @State private var passphraseMode: BackupPassphraseSheet.Mode = .createBackup
     @State private var passphraseError: String?
 
+    /// 从系统分享 / 「用其他应用打开」直接递进来的备份文件
+    private let initialFileURL: URL?
+    @State private var inboxFiles: [InboxFile] = []
+    @State private var didLoadInitialFile = false
+
+    init(initialFileURL: URL? = nil) {
+        self.initialFileURL = initialFileURL
+    }
+
     /// 待解锁的加密备份（口令对上之前先留在内存里）
     @State private var pendingEncryptedData: Data?
     @State private var pendingEncryptedFileName = ""
     @State private var pendingEnvelope: BackupEnvelope?
+    /// 这次恢复读的文件（容器内的副本在恢复成功后清掉）
+    @State private var pendingSourceURL: URL?
 
     @State private var pendingBackup: LedgerBackup?
     @State private var pendingFileName = ""
@@ -109,19 +121,7 @@ struct BackupRestoreView: View {
                 Text("备份包含账户、分类、流水、报销、贷款与还款计划、信用卡账单、借入借出、周期记账、常用组合、商户规则等全部数据，可换机或重装后恢复。文件用口令加密，只输入一次口令、导完立刻自检能解开。")
             }
 
-            Section {
-                Button {
-                    showImporter = true
-                } label: {
-                    Label("从备份文件恢复", systemImage: "arrow.down.doc")
-                        .frame(maxWidth: .infinity)
-                }
-                .disabled(isWorking)
-            } header: {
-                Text("恢复")
-            } footer: {
-                Text("恢复会覆盖当前全部数据。恢复前会自动把当前数据另存一份到 App 的「文件 → 轻账 → AutoBackup」目录，副本同样用本次口令加密。")
-            }
+            restoreSection
 
             if let message {
                 Section {
@@ -141,8 +141,23 @@ struct BackupRestoreView: View {
         }
         .navigationTitle("备份与恢复")
         .navigationBarTitleDisplayMode(.inline)
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: importTypes) { result in
-            handleImport(result)
+        .toolbar {
+            if initialFileURL != nil {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+        }
+        // 不用 SwiftUI 的 .fileImporter：它在部分模态栈里会「弹出来却选不动」，
+        // 而且默认按安全作用域给 URL。这里统一走 asCopy 的 UIDocumentPicker，
+        // 文件先落到本地临时目录，读的时候不会因为 iCloud 未下载而静默失败。
+        .sheet(isPresented: $showImporter) {
+            DocumentPicker(allowedTypes: [.item]) { url in
+                showImporter = false
+                handleImportURL(url)
+            } onCancel: {
+                showImporter = false
+            }
         }
         .sheet(isPresented: $showPassphraseSheet) {
             passphraseSheet
@@ -156,14 +171,66 @@ struct BackupRestoreView: View {
         } message: {
             Text("将用「\(pendingFileName)」覆盖当前全部数据。\n\n\(pendingMetaText)\n备份内容：\(pendingSummaryText)")
         }
+        .onAppear { refreshInbox() }
+        .task {
+            guard !didLoadInitialFile else { return }
+            didLoadInitialFile = true
+            if let initialFileURL {
+                handleImportURL(initialFileURL)
+            }
+        }
     }
 
-    private var importTypes: [UTType] {
-        var types: [UTType] = [.json, .data]
-        if let ledgerbak = UTType(filenameExtension: BackupService.encryptedExtension) {
-            types.append(ledgerbak)
+    /// 恢复入口：系统选择器 + App 收件箱两条路，后者不依赖任何系统授权
+    @ViewBuilder
+    private var restoreSection: some View {
+        Section {
+            Button {
+                showImporter = true
+            } label: {
+                Label("从备份文件恢复", systemImage: "arrow.down.doc")
+                    .frame(maxWidth: .infinity)
+            }
+            .disabled(isWorking)
+
+            ForEach(inboxFiles) { file in
+                Button {
+                    handleImportURL(file.url)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: file.kind.systemImage)
+                            .foregroundStyle(Theme.accent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(file.name)
+                                .font(.subheadline)
+                                .lineLimit(1)
+                            Text("\(file.sizeText) · \(file.modifiedText)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.down.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+
+            Button {
+                refreshInbox()
+            } label: {
+                Label("刷新轻账文件夹", systemImage: "arrow.clockwise")
+                    .font(.footnote)
+            }
+        } header: {
+            Text("恢复")
+        } footer: {
+            Text("系统选择器里点不动的文件（iCloud 未授权、微信目录等），先把文件放进「文件 App → 我的 iPhone → 轻账 → 导入」，它就会出现在上面的列表里，点一下即可恢复，完全不经过选择器。\n\n恢复会覆盖当前全部数据。恢复前会自动把当前数据另存一份到「轻账 → AutoBackup」，副本同样用本次口令加密。")
         }
-        return types
+    }
+
+    private func refreshInbox() {
+        inboxFiles = FileInbox.candidates(kind: .backup)
     }
 
     @ViewBuilder
@@ -239,7 +306,15 @@ struct BackupRestoreView: View {
 
     private func handleImport(_ result: Result<URL, Error>) {
         do {
-            let url = try result.get()
+            handleImportURL(try result.get())
+        } catch {
+            errorMessage = "读取备份失败：\(error.localizedDescription)"
+            Haptics.warning()
+        }
+    }
+
+    private func handleImportURL(_ url: URL) {
+        do {
             let accessing = url.startAccessingSecurityScopedResource()
             defer {
                 if accessing { url.stopAccessingSecurityScopedResource() }
@@ -251,6 +326,7 @@ struct BackupRestoreView: View {
             if let envelope = BackupCrypto.envelope(in: data) {
                 pendingEncryptedData = data
                 pendingEncryptedFileName = url.lastPathComponent
+                pendingSourceURL = url
                 pendingEnvelope = envelope
                 passphraseError = nil
                 passphraseMode = .unlockBackup
@@ -258,6 +334,7 @@ struct BackupRestoreView: View {
             } else {
                 let decoded = try BackupService.decodeDetailed(data)
                 let fileName = url.lastPathComponent
+                pendingSourceURL = url
                 // fileImporter 正在收起，直接弹 alert 会被系统吞掉；等它落定再弹。
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     apply(decoded, fileName: fileName, wasEncrypted: false)
@@ -319,6 +396,11 @@ struct BackupRestoreView: View {
             }
             errorMessage = nil
             Haptics.success()
+            if let pendingSourceURL {
+                FileInbox.consume(pendingSourceURL)
+                self.pendingSourceURL = nil
+                refreshInbox()
+            }
         } catch {
             errorMessage = "恢复失败：\(error.localizedDescription)"
             Haptics.warning()

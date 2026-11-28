@@ -62,6 +62,30 @@
 			</array>
 		</dict>
 	</array>
+	<!-- .ledgerbak 的自有类型必须在这里声明；不声明的话系统只认识一个动态 UTI，
+	     选择器与「打开方式」都会把它当成未知文件，分享到本应用时可能直接被拦掉 -->
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.example.ledger.backup</string>
+			<key>UTTypeDescription</key>
+			<string>轻账备份</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>ledgerbak</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/x-ledger-backup</string>
+			</dict>
+		</dict>
+	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -77,6 +101,18 @@
 				<string>public.delimited-values-text</string>
 				<string>public.text</string>
 				<string>public.data</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>轻账备份</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.example.ledger.backup</string>
 			</array>
 		</dict>
 		<dict>

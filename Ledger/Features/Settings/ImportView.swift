@@ -16,6 +16,9 @@ struct ImportView: View {
     @State private var summary: ImportSummary?
     @State private var defaultAccountId: UUID?
     @State private var isWorking = false
+    /// 刚才解析成功、导入完成后要从容器里清掉的那一份
+    @State private var pendingInboxFile: URL?
+    @State private var inboxFiles: [InboxFile] = []
 
     /// 从系统分享面板 / 「用其他应用打开」传进来的文件
     private let initialFileURL: URL?
@@ -80,6 +83,48 @@ struct ImportView: View {
                 }
             } footer: {
                 Text("支持 Cookie 记账导出的 CSV（含表头「时间,收支,一级分类…」）。按原始记录 ID 去重，重复导入不会产生重复账。仅导入收入/支出，转账等未建模类型会跳过，请先核对识别条数。")
+            }
+
+            Section {
+                if inboxFiles.isEmpty {
+                    Text("「轻账」文件夹里暂时没有 CSV。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(inboxFiles) { file in
+                        Button {
+                            pendingInboxFile = file.url
+                            load(url: file.url)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: file.kind.systemImage)
+                                    .foregroundStyle(Theme.accent)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(file.name)
+                                        .font(.subheadline)
+                                        .lineLimit(1)
+                                    Text("\(file.sizeText) · \(file.modifiedText)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.down.circle")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Button {
+                    refreshInbox()
+                } label: {
+                    Label("刷新列表", systemImage: "arrow.clockwise")
+                        .font(.footnote)
+                }
+            } header: {
+                Text("从「轻账」文件夹读取")
+            } footer: {
+                Text("把 CSV 放进「文件 App → 我的 iPhone → 轻账 → 导入」，上面的列表会自动出现。这条路径不经过系统选择器，不依赖 iCloud 权限，任何来源的文件都能读。")
             }
 
             Section {
@@ -204,6 +249,7 @@ struct ImportView: View {
             if defaultAccountId == nil {
                 defaultAccountId = selectableAccounts.first?.id
             }
+            refreshInbox()
         }
         .task {
             if let url = initialFileURL {
@@ -225,6 +271,10 @@ struct ImportView: View {
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    private func refreshInbox() {
+        inboxFiles = FileInbox.candidates(kind: .csv)
     }
 
     private func load(url: URL) {
@@ -286,6 +336,12 @@ struct ImportView: View {
             )
             summary = result
             errorMessage = nil
+            // 容器内的副本已经用过了，删掉，免得下次又出现在列表里
+            if let pendingInboxFile {
+                FileInbox.consume(pendingInboxFile)
+                self.pendingInboxFile = nil
+                refreshInbox()
+            }
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             Haptics.warning()

@@ -103,6 +103,10 @@ struct RootTabView: View {
 
     /// 从系统「分享到本应用」或「用其他应用打开」传进来的文件
     @State private var sharedFile: SharedFile?
+    /// 分享进来的备份文件走恢复页，不再被当成 CSV 去解析
+    @State private var sharedBackup: SharedFile?
+    @State private var pendingSharedBackup: SharedFile?
+    @State private var didScanDeliveredFiles = false
 
     /// 截图识别待确认的草稿（快捷指令 / 相册 / 文件导入）
     @State private var importDraft: ScreenshotImportDraft?
@@ -128,11 +132,7 @@ struct RootTabView: View {
         .onOpenURL { url in
             handleIncomingURL(url)
         }
-        .sheet(item: $sharedFile) { file in
-            NavigationStack {
-                ImportView(initialFileURL: file.url)
-            }
-        }
+        .sharedFileSheets(csv: $sharedFile, backup: $sharedBackup)
         .sheet(item: $importDraft) { draft in
             EntrySheet(prefill: EntrySheetPrefill(draft: draft))
                 .presentationDetents([.large])
@@ -184,6 +184,10 @@ struct RootTabView: View {
             if let file = pendingSharedFile {
                 pendingSharedFile = nil
                 sharedFile = file
+            }
+            if let file = pendingSharedBackup {
+                pendingSharedBackup = nil
+                sharedBackup = file
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .screenshotImportReady)) { _ in
@@ -242,6 +246,14 @@ struct RootTabView: View {
             if !onboardingCompleted {
                 showOnboarding = true
             }
+            // 冷启动兜底：从「文件」分享进来时偶尔会先走启动流程、onOpenURL 被吞掉，
+            // 系统投递到 Documents/Inbox 的那份还留着，这里补一次分流。
+            if !didScanDeliveredFiles {
+                didScanDeliveredFiles = true
+                if let delivered = FileInbox.candidates().first(where: { $0.url.path.hasPrefix(FileInbox.systemInbox.path) }) {
+                    handleIncomingFileURL(delivered.url)
+                }
+            }
             // 快捷指令拉起 App 时，识别结果可能比 UI 晚一点点
             try? await Task.sleep(nanoseconds: 600_000_000)
             takePendingScreenshotDraft()
@@ -296,6 +308,14 @@ struct RootTabView: View {
         sharedFile = file
     }
 
+    private func presentSharedBackup(_ file: SharedFile) {
+        if lockEnabled && !unlocked {
+            pendingSharedBackup = file
+            return
+        }
+        sharedBackup = file
+    }
+
     private func handleQuickAction(_ type: String) {
         UserDefaults.standard.removeObject(forKey: AppDelegate.pendingQuickActionKey)
         switch type {
@@ -333,11 +353,37 @@ struct RootTabView: View {
                 importScreenshot(fromFileURL: url)
                 return
             }
-            presentSharedFile(SharedFile(url: url))
+            handleIncomingFileURL(url)
             return
         }
 
         // 非 file URL 不该被当成 CSV 文件读取（Info.plist 收敛后也不应再出现），直接忽略。
+    }
+
+    /// 分享 / 「用其他应用打开」的统一下游。
+    ///
+    /// 两个关键点：
+    /// 1) 先复制进自己的容器——外部 URL 的安全作用域只在这个回调里有效，
+    ///    直接拿去读，遇到 iCloud 未下载或别的 App 容器就会静默失败（「点了没反应」）；
+    /// 2) 按扩展名分流——备份文件以前被塞给 CSV 解析器，必然报错，看起来也像「没反应」。
+    private func handleIncomingFileURL(_ url: URL) {
+        let kind = FileInbox.kind(of: url)
+        let copy: URL
+        do {
+            copy = try FileInbox.importableCopy(of: url)
+        } catch {
+            importHint = "文件读不出来：\(error.localizedDescription)\n可以把它放进「文件 App → 我的 iPhone → 轻账 → 导入」，再从应用内导入。"
+            return
+        }
+
+        switch kind {
+        case .backup:
+            presentSharedBackup(SharedFile(url: copy))
+        case .image:
+            importScreenshot(fromFileURL: copy)
+        default:
+            presentSharedFile(SharedFile(url: copy))
+        }
     }
 
     /// 快捷指令把截图存进「轻账」目录后，用 ledger://import-screenshot 触发

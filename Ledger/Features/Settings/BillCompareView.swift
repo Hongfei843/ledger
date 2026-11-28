@@ -17,6 +17,7 @@ struct BillCompareView: View {
     @State private var errorMessage: String?
     @State private var accountId: UUID?
     @State private var toast: String?
+    @State private var inboxFiles: [InboxFile] = []
 
     private var targetBookId: UUID? {
         BookScope.currentId
@@ -56,8 +57,28 @@ struct BillCompareView: View {
                 if let errorMessage {
                     Text(errorMessage).font(.caption).foregroundStyle(Theme.danger)
                 }
+                if !inboxFiles.isEmpty {
+                    ForEach(inboxFiles) { file in
+                        Button {
+                            handlePick(file.url)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "tablecells")
+                                    .foregroundStyle(Theme.accent)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(file.name).font(.subheadline).lineLimit(1)
+                                    Text("\(file.sizeText) · \(file.modifiedText)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             } footer: {
-                Text("支持支付宝、微信导出的账单 CSV。比对结果仅限上方所选账户；比对本身不会改动数据，只有点击“全部补录”才会写入。")
+                Text("支持支付宝、微信导出的账单 CSV。比对结果仅限上方所选账户；比对本身不会改动数据，只有点击“全部补录”才会写入。\n\n选择器里点不动的文件，放进「文件 App → 我的 iPhone → 轻账 → 导入」，会自动出现在上面的列表里。")
             }
 
             if let result {
@@ -162,6 +183,7 @@ struct BillCompareView: View {
         }
         .onAppear {
             if accountId == nil { accountId = selectableAccounts.first?.id }
+            inboxFiles = FileInbox.candidates(kind: .csv)
         }
         .onChange(of: accountId) { _, _ in
             if !rows.isEmpty {
