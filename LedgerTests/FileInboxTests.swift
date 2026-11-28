@@ -101,6 +101,14 @@ final class FileInboxTests: XCTestCase {
         }
     }
 
+    func testDataCopyFallbackWritesIntoImportFolder() throws {
+        let external = try write("兜底.csv", contents: Data("时间,收支\n".utf8))
+        let copy = try FileInbox.importableDataCopy(of: external)
+        XCTAssertTrue(copy.path.hasPrefix(FileInbox.documents.path))
+        XCTAssertEqual(try Data(contentsOf: copy), Data("时间,收支\n".utf8))
+        FileInbox.consume(copy)
+    }
+
     func testConsumeOnlyTouchesContainerFiles() throws {
         let external = try write("别删我.csv", contents: Data("x\n".utf8))
         FileInbox.consume(external)

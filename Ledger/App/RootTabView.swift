@@ -98,15 +98,21 @@ struct RootTabView: View {
     @State private var showQuickEntry = false
     /// 锁屏期间来自 Siri / 桌面快捷方式的动作，解锁后再执行，避免余额与表单暴露在锁屏之上。
     @State private var pendingQuickEntry = false
-    @State private var pendingSharedFile: SharedFile?
     @State private var selectedTab: LedgerTab = .transactions
 
     /// 从系统「分享到本应用」或「用其他应用打开」传进来的文件
     @State private var sharedFile: SharedFile?
     /// 分享进来的备份文件走恢复页，不再被当成 CSV 去解析
     @State private var sharedBackup: SharedFile?
-    @State private var pendingSharedBackup: SharedFile?
+    /// 收到的文件先挂成顶部提示条，用户点一下才开弹窗。
+    /// 直接自动弹 sheet 时，如果 App 正在被系统拉起，弹窗会被吞掉——现象就是「毫无反应」。
+    @State private var incomingFile: IncomingFile?
+    @State private var pendingIncomingFile: IncomingFile?
     @State private var didScanDeliveredFiles = false
+    /// 同一份文件在 30 秒内只处理一次：系统可能既走 delegate 又走 onOpenURL
+    @State private var recentHandledFiles: [String: Date] = [:]
+    /// 已经处理过的 Inbox 投递文件名，避免每次回前台都重复弹
+    @State private var handledInboxFiles: Set<String> = []
 
     /// 截图识别待确认的草稿（快捷指令 / 相册 / 文件导入）
     @State private var importDraft: ScreenshotImportDraft?
@@ -133,6 +139,20 @@ struct RootTabView: View {
             handleIncomingURL(url)
         }
         .sharedFileSheets(csv: $sharedFile, backup: $sharedBackup)
+        .overlay(alignment: .top) {
+            if let incomingFile {
+                IncomingFileBanner(
+                    fileName: incomingFile.url.lastPathComponent,
+                    subtitle: incomingFile.kind == .backup
+                        ? "备份已放进「轻账 → 导入」，点这里开始恢复"
+                        : "账单已放进「轻账 → 导入」，点这里开始导入",
+                    actionTitle: incomingFile.kind == .backup ? "去恢复" : "去导入",
+                    onAction: { openIncoming() },
+                    onDismiss: { self.incomingFile = nil }
+                )
+                .padding(.top, 6)
+            }
+        }
         .sheet(item: $importDraft) { draft in
             EntrySheet(prefill: EntrySheetPrefill(draft: draft))
                 .presentationDetents([.large])
@@ -181,13 +201,9 @@ struct RootTabView: View {
                 pendingQuickEntry = false
                 showQuickEntry = true
             }
-            if let file = pendingSharedFile {
-                pendingSharedFile = nil
-                sharedFile = file
-            }
-            if let file = pendingSharedBackup {
-                pendingSharedBackup = nil
-                sharedBackup = file
+            if let file = pendingIncomingFile {
+                pendingIncomingFile = nil
+                incomingFile = file
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .screenshotImportReady)) { _ in
@@ -210,6 +226,13 @@ struct RootTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .intentImportScreenshot)) { _ in
             IntentBridge.clearPending()
             importScreenshotFromInbox()
+        }
+        // 「文件」App 点文件 / 分享面板走的是 delegate 的 openURL，不一定触发 onOpenURL，
+        // 两条通道都收，接到再统一去重
+        .onReceive(NotificationCenter.default.publisher(for: AppDelegate.openFileNotification)) { note in
+            if let url = note.object as? URL {
+                handleIncomingFileURL(url)
+            }
         }
         .task {
             SeedData.bootstrapIfNeeded(context: context)
@@ -250,9 +273,7 @@ struct RootTabView: View {
             // 系统投递到 Documents/Inbox 的那份还留着，这里补一次分流。
             if !didScanDeliveredFiles {
                 didScanDeliveredFiles = true
-                if let delivered = FileInbox.candidates().first(where: { $0.url.path.hasPrefix(FileInbox.systemInbox.path) }) {
-                    handleIncomingFileURL(delivered.url)
-                }
+                processDeliveredFiles()
             }
             // 快捷指令拉起 App 时，识别结果可能比 UI 晚一点点
             try? await Task.sleep(nanoseconds: 600_000_000)
@@ -271,6 +292,9 @@ struct RootTabView: View {
             hasActivatedOnce = true
             showPrivacyShield = false
             takePendingScreenshotDraft()
+            // 从「文件」App 直接点开文件时，App 往往是被拉到前台而不是新启动，
+            // 这时 onOpenURL 与 delegate 都可能漏，回前台补一次
+            processDeliveredFiles()
         case .inactive:
             if previousPhase == .background {
                 showPrivacyShield = false
@@ -300,20 +324,29 @@ struct RootTabView: View {
     }
 
     /// 分享进来的文件同样受应用锁保护。
-    private func presentSharedFile(_ file: SharedFile) {
+    ///
+    /// 不再直接弹 sheet：把文件挂成顶部提示条，用户点一下才开弹窗。
+    /// 系统拉起 App 时自动弹的模态经常被吞掉，表现就是「分享过去一点反应也没有」；
+    /// 提示条是普通视图，只要 App 起来了就一定会出现。
+    private func queueIncoming(_ file: IncomingFile) {
         if lockEnabled && !unlocked {
-            pendingSharedFile = file
+            pendingIncomingFile = file
             return
         }
-        sharedFile = file
+        incomingFile = file
+        Haptics.tap()
     }
 
-    private func presentSharedBackup(_ file: SharedFile) {
-        if lockEnabled && !unlocked {
-            pendingSharedBackup = file
-            return
+    /// 用户点「去恢复 / 去导入」时才开对应的弹窗
+    private func openIncoming() {
+        guard let file = incomingFile else { return }
+        incomingFile = nil
+        switch file.kind {
+        case .backup:
+            sharedBackup = SharedFile(url: file.url)
+        default:
+            sharedFile = SharedFile(url: file.url)
         }
-        sharedBackup = file
     }
 
     private func handleQuickAction(_ type: String) {
@@ -360,6 +393,31 @@ struct RootTabView: View {
         // 非 file URL 不该被当成 CSV 文件读取（Info.plist 收敛后也不应再出现），直接忽略。
     }
 
+    /// 把系统递进来的文件补上：先吃 delegate 缓存的 URL，再扫一遍 Inbox 里没处理过的投递。
+    private func processDeliveredFiles() {
+        if let pending = AppDelegate.takePendingFileURL() {
+            handleIncomingFileURL(pending)
+            return
+        }
+        let delivered = FileInbox.candidates()
+            .first { $0.url.path.hasPrefix(FileInbox.systemInbox.path) && !handledInboxFiles.contains($0.name) }
+        if let delivered {
+            handledInboxFiles.insert(delivered.name)
+            handleIncomingFileURL(delivered.url)
+        }
+    }
+
+    /// 同一份文件 30 秒内只处理一次
+    private func isDuplicateDelivery(_ url: URL) -> Bool {
+        let now = Date()
+        recentHandledFiles = recentHandledFiles.filter { now.timeIntervalSince($0.value) < 30 }
+        guard recentHandledFiles[url.path] != nil else {
+            recentHandledFiles[url.path] = now
+            return false
+        }
+        return true
+    }
+
     /// 分享 / 「用其他应用打开」的统一下游。
     ///
     /// 两个关键点：
@@ -367,22 +425,24 @@ struct RootTabView: View {
     ///    直接拿去读，遇到 iCloud 未下载或别的 App 容器就会静默失败（「点了没反应」）；
     /// 2) 按扩展名分流——备份文件以前被塞给 CSV 解析器，必然报错，看起来也像「没反应」。
     private func handleIncomingFileURL(_ url: URL) {
+        guard !isDuplicateDelivery(url) else { return }
         let kind = FileInbox.kind(of: url)
-        let copy: URL
-        do {
-            copy = try FileInbox.importableCopy(of: url)
-        } catch {
-            importHint = "文件读不出来：\(error.localizedDescription)\n可以把它放进「文件 App → 我的 iPhone → 轻账 → 导入」，再从应用内导入。"
+
+        // 先落进自己的容器：文件系统复制优先，失败再退回「读出字节另写一份」
+        let resolved = (try? FileInbox.importableCopy(of: url))
+            ?? (try? FileInbox.importableDataCopy(of: url))
+        guard let copy = resolved else {
+            importHint = "文件读不出来。\n把它放进「文件 App → 我的 iPhone → 轻账 → 导入」，再从应用内导入。"
             return
         }
 
         switch kind {
         case .backup:
-            presentSharedBackup(SharedFile(url: copy))
+            queueIncoming(IncomingFile(url: copy, kind: .backup))
         case .image:
             importScreenshot(fromFileURL: copy)
         default:
-            presentSharedFile(SharedFile(url: copy))
+            queueIncoming(IncomingFile(url: copy, kind: kind))
         }
     }
 

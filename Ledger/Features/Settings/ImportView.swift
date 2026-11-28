@@ -88,8 +88,9 @@ struct ImportView: View {
             Section {
                 if inboxFiles.isEmpty {
                     Text("「轻账」文件夹里暂时没有 CSV。")
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .listRowSeparator(.hidden)
                 } else {
                     ForEach(inboxFiles) { file in
                         Button {
@@ -98,6 +99,7 @@ struct ImportView: View {
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: file.kind.systemImage)
+                                    .font(.system(size: 14))
                                     .foregroundStyle(Theme.accent)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(file.name)
@@ -107,12 +109,14 @@ struct ImportView: View {
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                 }
-                                Spacer()
-                                Image(systemName: "arrow.down.circle")
-                                    .foregroundStyle(.secondary)
+                                Spacer(minLength: 0)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.tertiary)
                             }
                         }
                         .buttonStyle(.plain)
+                        .listRowSeparator(.hidden)
                     }
                 }
                 Button {
@@ -121,10 +125,11 @@ struct ImportView: View {
                     Label("刷新列表", systemImage: "arrow.clockwise")
                         .font(.footnote)
                 }
+                .listRowSeparator(.hidden)
             } header: {
                 Text("从「轻账」文件夹读取")
             } footer: {
-                Text("把 CSV 放进「文件 App → 我的 iPhone → 轻账 → 导入」，上面的列表会自动出现。这条路径不经过系统选择器，不依赖 iCloud 权限，任何来源的文件都能读。")
+                Text("把 CSV 放进「文件 App → 我的 iPhone → 轻账 → 导入」，上面就会出现。这条路径不经过系统选择器，不依赖 iCloud 权限。")
             }
 
             Section {
@@ -219,6 +224,7 @@ struct ImportView: View {
         }
         .navigationTitle("导入账单")
         .navigationBarTitleDisplayMode(.inline)
+        .contentMargins(.bottom, Theme.Layout.tabBarHeight + 12, for: .scrollContent)
         .toolbar {
             if initialFileURL != nil {
                 ToolbarItem(placement: .topBarLeading) {
@@ -253,6 +259,8 @@ struct ImportView: View {
         }
         .task {
             if let url = initialFileURL {
+                // 分享进来的副本放在「导入」目录里，导入成功后一并清掉
+                pendingInboxFile = url
                 load(url: url)
             }
         }

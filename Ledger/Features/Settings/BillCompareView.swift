@@ -162,6 +162,7 @@ struct BillCompareView: View {
         }
         .navigationTitle("账单比对")
         .navigationBarTitleDisplayMode(.inline)
+        .contentMargins(.bottom, Theme.Layout.tabBarHeight + 12, for: .scrollContent)
         .sheet(isPresented: $showPicker) {
             DocumentPicker(allowedTypes: [.item]) { url in
                 showPicker = false

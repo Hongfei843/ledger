@@ -160,6 +160,22 @@ enum FileInbox {
         return destination
     }
 
+    /// 兜底版本：文件系统复制可能因为安全作用域/文件协调器失败，
+    /// 这时直接按字节读出来再写一份到「导入」目录——只要读得到，就能落下来。
+    static func importableDataCopy(of url: URL) throws -> URL {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        let data = try Data(contentsOf: url)
+        guard !data.isEmpty else { throw CocoaError(.fileReadUnknown) }
+
+        let folder = try ensureImportFolder()
+        let name = uniqueName(for: url.lastPathComponent, in: folder)
+        let destination = folder.appendingPathComponent(name)
+        try data.write(to: destination, options: .atomic)
+        return destination
+    }
+
     /// 导入成功后删掉容器内的副本，避免同一份文件下次又被列出来。
     /// 容器外的文件一律不碰。
     static func consume(_ url: URL) {
