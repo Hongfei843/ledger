@@ -108,9 +108,6 @@ struct RootTabView: View {
     @State private var importDraft: ScreenshotImportDraft?
     @State private var importHint: String?
 
-    /// 写入失败提示：保存失败时短暂浮在顶部，避免「记了但没存上」变成静默事故
-    @State private var writeFailureText: String?
-
     var body: some View {
         // 不再使用系统 TabView，避免 iOS 26 即使隐藏 tabItem 仍残留空白胶囊背景。
         // 五页常驻可保留各自的导航与滚动状态，非当前页不接收触摸和辅助功能焦点。
@@ -170,11 +167,7 @@ struct RootTabView: View {
                 PrivacyShieldView()
             }
         }
-        .overlay(alignment: .top) { writeFailureBanner }
-        .animation(.spring(response: 0.30, dampingFraction: 0.88), value: writeFailureText)
-        .onReceive(NotificationCenter.default.publisher(for: PersistenceFailureCenter.didFail)) { note in
-            handleWriteFailure(note)
-        }
+        .persistenceFailureBanner()
         .onChange(of: scenePhase) { _, phase in
             handleScenePhase(phase)
         }
@@ -252,48 +245,6 @@ struct RootTabView: View {
             // 快捷指令拉起 App 时，识别结果可能比 UI 晚一点点
             try? await Task.sleep(nanoseconds: 600_000_000)
             takePendingScreenshotDraft()
-        }
-    }
-
-    // MARK: - 写入失败提示
-
-    /// 保存失败时浮在顶部的一条提示。
-    /// 单独抽出来是因为放进 body 链里会让整个根视图表达式复杂到编译器放弃类型推断（真吃过一次这个亏）。
-    @ViewBuilder
-    private var writeFailureBanner: some View {
-        if let writeFailureText {
-            HStack(spacing: 8) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                Text(writeFailureText)
-                    .font(.footnote)
-                    .multilineTextAlignment(.leading)
-            }
-            .foregroundStyle(Theme.danger)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Theme.danger.opacity(0.28), lineWidth: 0.8)
-            )
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .allowsHitTesting(false)
-            .transition(.move(edge: .top).combined(with: .opacity))
-        }
-    }
-
-    private func handleWriteFailure(_ note: Notification) {
-        let action = note.userInfo?[PersistenceFailureCenter.actionKey] as? String ?? "改动"
-        let reason = note.userInfo?[PersistenceFailureCenter.reasonKey] as? String ?? ""
-        let text = "「\(action)」没保存成功，已撤销这次改动\n\(reason)"
-        Haptics.warning()
-        withAnimation { writeFailureText = text }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-            // 只清自己这一条，避免把随后又冒出来的新提示一起抹掉
-            if writeFailureText == text { withAnimation { writeFailureText = nil } }
         }
     }
 
