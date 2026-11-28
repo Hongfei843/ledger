@@ -15,7 +15,7 @@
 - 令牌：`.gh/token.txt`（仓库外，7 天过期）
 - 测试：191 个用例，CI 每次真跑
 - 项目状态：**定稿打磨版（功能冻结）**，可以导入真实数据开始正式使用；后续只做 bug 修复与界面手感优化。开发期内部数据不保留迁移逻辑；备份/CSV 等导入格式保持兼容
-- 最近绿色构建：2026-11-28 run `46117589474`（`macos-15-intel`，191 测试全绿，提交 `b8d3618`：隐私遮罩闪烁修复、明细页空状态居中/主卡高光去接缝/FAB 对齐、产物按版本号命名），版本 **1.0.186**
+- 最近绿色构建：2026-11-28 run `46119544933`（`macos-15-intel`，191 测试全绿，提交 `e4b6db9`：隐私遮罩闪烁修复、明细页空状态居中/主卡高光去接缝/FAB 对齐、空状态区补页面底色、产物按版本号命名），版本 **1.0.187**
 
 ## 1. 产品定位
 
@@ -346,9 +346,10 @@ CategoryMatcher、PeriodRange、RecurringEngine、ScreenshotParser、InsightEngi
 4. **FAB 对齐与遮挡**：`Theme.Layout` 拆出 `fabBottomOffset = 68 + 16 = 84`、`fabClearance = 84 + 84 = 168`；按钮右边距与 Tab 栏外缘对齐（12pt）；列表底部留白覆盖「按钮底边 + 按钮 56 + 28 呼吸」。
 5. **自定义区间标题重叠**：自定义区间时左侧胶囊变宽，不再渲染居中的「明细」。
 6. **弃用 API**：`navigationBarHidden(true)` 换成 `.toolbar(.hidden, for: .navigationBar)`。
-7. **产物命名**：见第 5 节，artifact 与本地 IPA 均带版本号。
+7. **空状态区底色**：空状态不再由 `List` 承载后少了底色，显式铺 `Theme.pageBackground`，深色下不会露出系统黑底形成色块；底栏阴影 0.10/22 收到 0.06/18，减少「浮起卡片」感。
+8. **产物命名**：见第 5 节，artifact 与本地 IPA 均带版本号。
 
-- **验证**：提交 `b8d361829d2946b86859550f4f47b17e13534d11`；CI run `46117589474`（job `140894771234`，`success`）；`Executed 191 tests, with 0 failures (0 unexpected)`；IPA `D:\开发\dist\Ledger-轻账-1.0.186.ipa`，4,424,146 bytes，SHA-256 `C4AD109414E11E9C8FE53DC5263B5229712F0D86F9DF01988D47ABF508658A61`；artifact `Ledger-1.0.186-unsigned-ipa`（id `15252911161`）。
+- **验证**：提交 `e4b6db916e8c27769f3e9f88fdd2f18f8e8fc948`（其下 `b8d3618` 为同一轮首批改动）；CI run `46119544933`（job `140900801015`，`success`）；`Executed 191 tests, with 0 failures (0 unexpected)`；IPA `D:\开发\dist\Ledger-轻账-1.0.187.ipa`，4,425,638 bytes，SHA-256 `7984E09B2BB45F5509B009E67736CA5995C9B25B19D0DB070A6B4645C02E94F5`；artifact `Ledger-1.0.187-unsigned-ipa`（id `15252992667`）。
 - **边界**：CI 只覆盖编译与单测；居中空状态、径向高光、阴影与遮罩时序需 **1.0.186 装机截图**确认；深色 / 大字体 / 小屏仍未验。
 
 ## 19. 导入真实数据前的检查清单
