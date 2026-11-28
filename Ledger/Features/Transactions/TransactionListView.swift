@@ -638,17 +638,16 @@ struct TransactionListView: View {
         }
         .padding(Theme.Spacing.xl)
         .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay {
-            // 顶部右侧的高光改成无硬边的径向渐变：原来的实心圆在渐变底色上会露出一道弧形接缝。
-            RadialGradient(
-                colors: [.white.opacity(0.10), .white.opacity(0.03), .clear],
-                center: .topTrailing,
-                startRadius: 0,
-                endRadius: 260
-            )
+        // 右上角圆弧是各页主卡的统一装饰（统计 / 报销 / 资产同款），保持同一形状与透明度。
+        .overlay(alignment: .topTrailing) {
+            Circle()
+                .fill(.white.opacity(0.07))
+                .frame(width: 150, height: 150)
+                .offset(x: 54, y: -64)
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: .black.opacity(0.10), radius: 18, y: 10)
+        // 明细卡片下面是大片留白，任何投影都会变成一条「灰带」；统计/资产/报销的卡片下面紧跟白卡，
+        // 投影被遮住才不显。这里保持卡片平贴页面底色，不再加阴影。
     }
 
     private func heroMetric(title: String, value: String) -> some View {

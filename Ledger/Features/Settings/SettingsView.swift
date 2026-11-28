@@ -27,29 +27,30 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section {
-                    HStack(spacing: Theme.Spacing.l) {
+                    // 品牌区只做「身份 + 数据在哪」的交代，压到一行的高度，不再占掉小半屏。
+                    HStack(spacing: Theme.Spacing.m) {
                         Image(systemName: "banknote.fill")
-                            .font(.system(size: 26, weight: .semibold))
+                            .font(.system(size: 21, weight: .semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 58, height: 58)
-                            .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
-                            .shadow(color: Theme.accent.opacity(0.20), radius: 12, y: 5)
-                        VStack(alignment: .leading, spacing: 5) {
+                            .frame(width: 46, height: 46)
+                            .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                            .shadow(color: Theme.accent.opacity(0.16), radius: 10, y: 4)
+                        VStack(alignment: .leading, spacing: 2) {
                             Text("轻账")
-                                .font(.system(size: 25, weight: .bold, design: .rounded))
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
                             Text("把每一笔记成确定性")
-                                .font(.caption)
+                                .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
                         Label("本机私密", systemImage: "lock.shield")
-                            .font(.caption2.weight(.medium))
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(Theme.accent)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
                             .background(Theme.accent.opacity(0.10), in: Capsule())
                     }
-                    .padding(.vertical, Theme.Spacing.s)
+                    .padding(.vertical, 2)
                     .listRowBackground(Color.clear)
                 }
 
@@ -152,7 +153,8 @@ struct SettingsView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .background(Theme.pageBackground)
-            .listSectionSpacing(18)
+            .contentMargins(.top, 0, for: .scrollContent)
+            .listSectionSpacing(14)
             .navigationTitle("我的")
             .navigationBarTitleDisplayMode(.inline)
         }

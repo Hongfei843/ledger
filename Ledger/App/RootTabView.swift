@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Combine
+import UIKit
 
 enum LedgerTab: Int, Hashable {
     case transactions, stats, claims, assets, settings
@@ -28,13 +29,18 @@ enum LedgerTab: Int, Hashable {
 
 struct LedgerFloatingTabBar: View {
     @Binding var selection: LedgerTab
+    /// 选中胶囊用同一份几何在五个位置之间滑动，而不是每个位置各画一个。
+    @Namespace private var pill
+
+    private let tabs: [LedgerTab] = [.transactions, .stats, .claims, .assets, .settings]
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach([LedgerTab.transactions, .stats, .claims, .assets, .settings], id: \.self) { tab in
+            ForEach(tabs, id: \.self) { tab in
                 Button {
+                    guard selection != tab else { return }
                     Haptics.selection()
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                    withAnimation(.spring(response: 0.30, dampingFraction: 0.86)) {
                         selection = tab
                     }
                 } label: {
@@ -48,10 +54,14 @@ struct LedgerFloatingTabBar: View {
                     .foregroundStyle(selection == tab ? Theme.accent : Color.secondary)
                     .frame(maxWidth: .infinity)
                     .frame(height: Theme.Layout.tabBarHeight - 16)
-                    .background(
-                        selection == tab ? Theme.accent.opacity(0.11) : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 17, style: .continuous)
-                    )
+                    .background {
+                        if selection == tab {
+                            RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                .fill(Theme.accent.opacity(0.11))
+                                .matchedGeometryEffect(id: "tabPill", in: pill)
+                        }
+                    }
+                    .contentShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(tab.title)
@@ -178,6 +188,11 @@ struct RootTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .screenshotImportReady)) { _ in
             takePendingScreenshotDraft()
         }
+        // 系统在窗口真正显示之前就发这个通知：此刻撤掉遮罩，用户看不到「内容已隐藏」的那一帧；
+        // 后台期间遮罩一直盖着，任务切换器的快照仍然受保护。
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            showPrivacyShield = false
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppDelegate.quickActionNotification)) { note in
             if let type = note.object as? String {
                 handleQuickAction(type)
@@ -297,6 +312,8 @@ struct RootTabView: View {
     private func tabLayer<Content: View>(_ tab: LedgerTab, @ViewBuilder content: () -> Content) -> some View {
         content()
             .opacity(selectedTab == tab ? 1 : 0)
+            // 翻页用 0.16s 的短交叉淡入，比跟随胶囊的弹簧更利落，也不会拖出残影。
+            .animation(.easeOut(duration: 0.16), value: selectedTab)
             .allowsHitTesting(selectedTab == tab)
             .accessibilityHidden(selectedTab != tab)
             .zIndex(selectedTab == tab ? 1 : 0)
