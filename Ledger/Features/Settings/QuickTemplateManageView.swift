@@ -47,6 +47,7 @@ struct QuickTemplateListView: View {
                 Text("点一下编辑，左滑删除。记一笔时点模板即可一键套用。")
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("常用组合")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

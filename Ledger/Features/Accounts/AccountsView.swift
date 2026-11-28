@@ -93,6 +93,7 @@ struct AccountsView: View {
                 }
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("账户")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -118,12 +119,7 @@ struct AccountsView: View {
             openingBalanceMinor: account.openingBalanceMinor
         )
         return HStack(spacing: Theme.Spacing.m) {
-            BankMarkView(
-                bankId: account.bankId,
-                fallbackEmoji: account.iconEmoji,
-                fallbackColorHex: account.colorHex,
-                size: 38
-            )
+            AccountMarkView(account: account, size: 38)
             VStack(alignment: .leading, spacing: 2) {
                 Text(account.displayName)
                     .lineLimit(1)

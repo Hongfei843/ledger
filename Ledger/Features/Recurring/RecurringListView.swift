@@ -52,6 +52,7 @@ struct RecurringListView: View {
                 Text("开启「自动生成」后，每次打开 App 会把到今天为止该记的都补上（单次最多 40 条）。适合房租、订阅、还款、公积金缴存这类固定支出。")
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("周期记账")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

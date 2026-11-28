@@ -82,6 +82,7 @@ struct SearchView: View {
             }
         }
         .searchable(text: $criteria.keyword, placement: .navigationBarDrawer(displayMode: .always), prompt: "备注、商家、分类、账户或金额")
+        .ledgerTabBarClearance()
         .navigationTitle("搜索")
         .navigationBarTitleDisplayMode(.inline)
     }

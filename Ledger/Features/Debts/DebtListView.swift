@@ -64,6 +64,7 @@ struct DebtListView: View {
             section(title: "我欠别人", items: openBorrow)
             section(title: "已结清", items: settled)
         }
+        .ledgerTabBarClearance()
         .navigationTitle("借入借出")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -125,6 +125,7 @@ struct TxnDetailView: View {
                 }
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("记录详情")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

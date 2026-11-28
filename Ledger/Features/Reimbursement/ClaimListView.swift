@@ -74,6 +74,7 @@ struct ClaimListView: View {
             .scrollContentBackground(.hidden)
             .background(Theme.pageBackground)
             .listSectionSpacing(16)
+            .ledgerTabBarClearance()
             .navigationTitle("报销")
             .navigationBarTitleDisplayMode(.inline)
             .alert("本月已有报销单", isPresented: $duplicateHint) {
@@ -136,7 +137,6 @@ struct ClaimListView: View {
                 .offset(x: 54, y: -64)
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: Theme.accent.opacity(0.22), radius: 24, x: 0, y: 12)
     }
 
     private func claimRow(_ claim: Claim) -> some View {

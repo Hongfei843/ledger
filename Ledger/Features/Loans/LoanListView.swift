@@ -68,6 +68,7 @@ struct LoanListView: View {
                     }
                 }
             }
+            .ledgerTabBarClearance()
             .navigationTitle("负债")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

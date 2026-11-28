@@ -70,6 +70,11 @@ enum Theme {
         static let fabBottomOffset: CGFloat = tabBarHeight + Theme.Spacing.l
         /// 列表底部留白：按钮底边 + 按钮 56 + 28 呼吸，保证最后一笔流水不被按钮压住。
         static let fabClearance: CGFloat = fabBottomOffset + 84
+        /// 页面底部避让：Tab 栏高度 + 12pt 呼吸。
+        ///
+        /// `safeAreaInset` 只压缩滚动安全区，页面本身仍铺到屏幕底部，列表最后一行会贴在玻璃栏下沿，
+        /// 看起来就是「被 Tab 栏挡住」。所有列表页统一补这段，不要在单页里各写一个数字。
+        static let tabBarClearance: CGFloat = tabBarHeight + 12
     }
 
     /// 字号规范：金额三档（26 / 17 / 13），统一圆体；等宽数字在调用处加 .monospacedDigit()
@@ -204,6 +209,13 @@ extension View {
     /// 顶部工具栏胶囊：周期控件与右侧操作组共用同一容器，消除边框/高度/留白不一致。
     func toolbarCapsuleStyle() -> some View {
         modifier(ToolbarCapsuleStyle())
+    }
+
+    /// 列表页统一避让悬浮 Tab 栏（Tab 栏高度 + 12pt 呼吸）。
+    ///
+    /// 只对滚动内容生效；页面顶部的固定按钮不用它，改用 `.safeAreaPadding(.bottom, ...)`。
+    func ledgerTabBarClearance() -> some View {
+        contentMargins(.bottom, Theme.Layout.tabBarClearance, for: .scrollContent)
     }
 }
 

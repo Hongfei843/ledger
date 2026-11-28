@@ -77,6 +77,7 @@ struct StatsView: View {
                 .padding(.bottom, Theme.Spacing.xxl)
             }
             .background(Theme.pageBackground)
+            .ledgerTabBarClearance()
             .navigationTitle("统计")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -205,7 +206,6 @@ struct StatsView: View {
                 .offset(x: 54, y: -64)
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: Theme.accent.opacity(0.22), radius: 24, x: 0, y: 12)
     }
 
     private func heroStat(title: String, value: Int64) -> some View {

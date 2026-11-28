@@ -48,6 +48,7 @@ struct ScreenshotGuideView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("截图记账")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -101,6 +101,7 @@ struct ExportView: View {
                 }
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("导出分析包")
         .navigationBarTitleDisplayMode(.inline)
     }

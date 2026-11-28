@@ -87,6 +87,7 @@ struct AssetsHomeView: View {
                 .padding(.vertical, Theme.Spacing.m)
             }
             .background(Theme.pageBackground)
+            .ledgerTabBarClearance()
             .navigationTitle("资产")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -143,7 +144,6 @@ struct AssetsHomeView: View {
                 .offset(x: 58, y: -74)
         }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: Theme.accent.opacity(0.22), radius: 24, x: 0, y: 12)
     }
 
     private func heroStat(title: String, value: String) -> some View {
@@ -235,12 +235,7 @@ struct AssetsHomeView: View {
 
     private func accountRow(_ account: Account) -> some View {
         HStack(spacing: Theme.Spacing.m) {
-            BankMarkView(
-                bankId: account.bankId,
-                fallbackEmoji: account.iconEmoji,
-                fallbackColorHex: account.colorHex,
-                size: 42
-            )
+            AccountMarkView(account: account, size: 42)
             VStack(alignment: .leading, spacing: 2) {
                 Text(account.displayName)
                     .font(.subheadline)

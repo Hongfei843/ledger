@@ -115,6 +115,7 @@ struct ReconciliationView: View {
                 }
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("对账")
         .navigationBarTitleDisplayMode(.inline)
     }

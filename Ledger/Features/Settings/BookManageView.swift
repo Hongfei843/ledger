@@ -67,6 +67,7 @@ struct BookManageView: View {
                 Text("适合把日常、家庭、副业分开记；新建后会立即切换过去。")
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("账本管理")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {

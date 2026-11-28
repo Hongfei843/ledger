@@ -130,6 +130,7 @@ struct ClaimReportView: View {
                 Text("PDF 是 A4 单页版式，可直接发给领导或存档。")
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("报销月报")
         .navigationBarTitleDisplayMode(.inline)
     }

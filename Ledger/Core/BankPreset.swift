@@ -76,11 +76,13 @@ struct BankPreset: Identifiable, Hashable {
     }
 }
 
-/// 品牌标记：优先用内置 Logo 图片，没有则退回「品牌色 + 缩写」
+/// 品牌标记：优先用内置 Logo 图片，没有则退回「品牌色 + 缩写」，再退回中性类型图标。
 struct BankMarkView: View {
     let bankId: String?
     let fallbackEmoji: String
     let fallbackColorHex: String
+    /// 传入账户类型时，没有品牌 Logo 的账户改用单色类型图标（现金/储蓄卡/信用卡同一套观感）。
+    var accountType: AccountType? = nil
     var size: CGFloat = 40
 
     private var preset: BankPreset? {
@@ -113,6 +115,15 @@ struct BankMarkView: View {
                         .foregroundStyle(preset.darkText ? Color.black : Color.white)
                 }
                 .frame(width: size, height: size)
+            } else if let accountType {
+                ZStack {
+                    RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                        .fill(Color(uiColor: .tertiarySystemFill))
+                    Image(systemName: accountType.iconSymbol)
+                        .font(.system(size: size * 0.40, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: size, height: size)
             } else {
                 Text(fallbackEmoji)
                     .font(.system(size: size * 0.46))
@@ -120,5 +131,21 @@ struct BankMarkView: View {
                     .background(Color(uiColor: .tertiarySystemFill), in: Circle())
             }
         }
+    }
+}
+
+/// 账户行统一使用的标记：品牌 Logo → 品牌缩写 → 单色类型图标。
+struct AccountMarkView: View {
+    let account: Account
+    var size: CGFloat = 38
+
+    var body: some View {
+        BankMarkView(
+            bankId: account.bankId,
+            fallbackEmoji: account.iconEmoji,
+            fallbackColorHex: account.colorHex,
+            accountType: account.type,
+            size: size
+        )
     }
 }

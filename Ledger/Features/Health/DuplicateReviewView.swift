@@ -70,6 +70,7 @@ struct DuplicateReviewView: View {
                 }
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("重复记录")
         .navigationBarTitleDisplayMode(.inline)
     }

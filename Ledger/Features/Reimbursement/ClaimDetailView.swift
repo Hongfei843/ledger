@@ -138,6 +138,7 @@ struct ClaimDetailView: View {
                 }
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle(claim.title)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showReceive) {

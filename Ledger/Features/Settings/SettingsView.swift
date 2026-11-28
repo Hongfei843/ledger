@@ -11,8 +11,12 @@ struct SettingsView: View {
     @AppStorage(Theme.accentHexKey) private var accentHex: String = Theme.defaultAccentHex
     @AppStorage(NotificationService.enabledKey) private var remindersEnabled = false
     @AppStorage("security.lockEnabled") private var lockEnabled = false
+    @AppStorage(BookScope.key) private var currentBookRaw = ""
     private var liveTxns: [Txn] {
-        txns.filter { $0.deletedAt == nil }
+        txns.filter { $0.deletedAt == nil && BookScope.matches($0.bookId, raw: currentBookRaw) }
+    }
+    private var liveAccounts: [Account] {
+        accounts.filter { $0.deletedAt == nil && BookScope.matches($0.bookId, raw: currentBookRaw) }
     }
 
     /// 从 Info.plist 读取真实版本，避免写死
@@ -75,7 +79,7 @@ struct SettingsView: View {
                 Section("数据") {
                     HStack(spacing: Theme.Spacing.xl) {
                         settingsMetric(title: "有效流水", value: "\(liveTxns.count)", unit: "笔")
-                        settingsMetric(title: "当前账户", value: "\(accounts.filter { $0.deletedAt == nil }.count)", unit: "个")
+                        settingsMetric(title: "当前账户", value: "\(liveAccounts.count)", unit: "个")
                     }
                     .padding(.vertical, Theme.Spacing.xs)
                     settingsLink("数据健康", systemImage: "heart.text.square") { DataHealthView() }
@@ -155,6 +159,7 @@ struct SettingsView: View {
             .background(Theme.pageBackground)
             .contentMargins(.top, 0, for: .scrollContent)
             .listSectionSpacing(14)
+            .ledgerTabBarClearance()
             .navigationTitle("我的")
             .navigationBarTitleDisplayMode(.inline)
         }

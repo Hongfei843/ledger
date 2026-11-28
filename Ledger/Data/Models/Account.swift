@@ -37,6 +37,23 @@ enum AccountType: String, CaseIterable, Identifiable, Codable {
     var isCreditLike: Bool {
         self == .credit || self == .bnpl
     }
+
+    /// 没有银行品牌 Logo 时用的中性图标。
+    /// 全部账户统一走「浅灰底 + 单色符号」，不再让「现金」用彩色 💵、卡片用灰 Logo 两套观感。
+    var iconSymbol: String {
+        switch self {
+        case .cash: return "banknote"
+        case .debit: return "creditcard"
+        case .credit: return "creditcard.fill"
+        case .ewallet: return "wallet.pass"
+        case .bnpl: return "clock.badge.checkmark"
+        case .prepaid: return "giftcard"
+        case .providentFund: return "building.columns"
+        case .investment: return "chart.line.uptrend.xyaxis"
+        case .loan: return "percent"
+        case .other: return "square.grid.2x2"
+        }
+    }
 }
 
 /// 账户。余额符号约定：资产为正、负债为负。

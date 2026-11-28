@@ -110,6 +110,7 @@ struct AccountDetailView: View {
                 }
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle(account.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

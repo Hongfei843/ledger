@@ -135,6 +135,7 @@ struct AssetOverviewView: View {
                 }
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("资产总览")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -179,8 +180,8 @@ struct AssetOverviewView: View {
         let ratio = ratioBase > 0 ? Double(value) / Double(ratioBase) : 0
 
         return VStack(spacing: 5) {
-            HStack {
-                Text(account.iconEmoji)
+            HStack(spacing: 6) {
+                AccountMarkView(account: account, size: 20)
                 Text(account.name).font(.subheadline)
                 Spacer()
                 Text(Money.format(value))

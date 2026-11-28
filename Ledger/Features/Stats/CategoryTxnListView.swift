@@ -98,6 +98,7 @@ struct CategoryTxnListView: View {
                 }
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
     }

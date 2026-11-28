@@ -56,6 +56,7 @@ struct ResetDataView: View {
                 Text("倒计时结束后还会再弹一次确认，不会直接删除。")
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("初始化数据")
         .navigationBarTitleDisplayMode(.inline)
         .alert("确认清空所有数据？", isPresented: $showFinalConfirm) {

@@ -210,6 +210,7 @@ struct DataHealthView: View {
                 issueRow(issue)
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("数据健康")
         .navigationBarTitleDisplayMode(.inline)
     }

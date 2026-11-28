@@ -40,13 +40,14 @@ struct LedgerFloatingTabBar: View {
                 Button {
                     guard selection != tab else { return }
                     Haptics.selection()
-                    withAnimation(.spring(response: 0.30, dampingFraction: 0.86)) {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
                         selection = tab
                     }
                 } label: {
                     VStack(spacing: 4) {
                         Image(systemName: tab.systemImage)
                             .font(.system(size: 17, weight: selection == tab ? .semibold : .regular))
+                            .scaleEffect(selection == tab ? 1.06 : 1)
                             .frame(height: 20)
                         Text(tab.title)
                             .font(.system(size: 10, weight: selection == tab ? .semibold : .medium))
@@ -57,7 +58,7 @@ struct LedgerFloatingTabBar: View {
                     .background {
                         if selection == tab {
                             RoundedRectangle(cornerRadius: 17, style: .continuous)
-                                .fill(Theme.accent.opacity(0.11))
+                                .fill(Theme.accent.opacity(0.13))
                                 .matchedGeometryEffect(id: "tabPill", in: pill)
                         }
                     }
@@ -69,12 +70,33 @@ struct LedgerFloatingTabBar: View {
             }
         }
         .padding(6)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        // 玻璃底：材质负责模糊，叠一层页面底色保证浅色模式下文字对比度，不再「透到看不清」。
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(.regularMaterial)
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .fill(Theme.pageBackground.opacity(0.55))
+            }
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.055), lineWidth: 0.5)
         )
-        .shadow(color: .black.opacity(0.06), radius: 18, x: 0, y: 8)
+        // 顶部一线高光，深色下能看出「一片玻璃」而不是一块灰矩形。
+        .overlay(alignment: .top) {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [.white.opacity(0.16), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 0.8
+                )
+                .allowsHitTesting(false)
+        }
+        .shadow(color: .black.opacity(0.05), radius: 16, x: 0, y: 6)
         .padding(.horizontal, Theme.Spacing.m)
         .padding(.bottom, 4)
     }
@@ -366,8 +388,8 @@ struct RootTabView: View {
     private func tabLayer<Content: View>(_ tab: LedgerTab, @ViewBuilder content: () -> Content) -> some View {
         content()
             .opacity(selectedTab == tab ? 1 : 0)
-            // 翻页用 0.16s 的短交叉淡入，比跟随胶囊的弹簧更利落，也不会拖出残影。
-            .animation(.easeOut(duration: 0.16), value: selectedTab)
+            // 翻页用 0.12s 的短交叉淡入，比跟随胶囊的弹簧更利落，也不会拖出残影。
+            .animation(.easeOut(duration: 0.12), value: selectedTab)
             .allowsHitTesting(selectedTab == tab)
             .accessibilityHidden(selectedTab != tab)
             .zIndex(selectedTab == tab ? 1 : 0)

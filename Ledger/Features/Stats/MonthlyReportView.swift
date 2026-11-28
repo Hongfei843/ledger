@@ -45,6 +45,7 @@ struct MonthlyReportView: View {
             .padding(.bottom, Theme.Spacing.xxl)
         }
         .background(Theme.pageBackground)
+        .ledgerTabBarClearance()
         .navigationTitle("月度报告")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

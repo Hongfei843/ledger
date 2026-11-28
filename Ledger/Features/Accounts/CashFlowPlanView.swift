@@ -90,6 +90,7 @@ struct CashFlowPlanView: View {
                 Text("口径：现金/储蓄卡/电子钱包/储值卡的余额计入可用资金；信用卡已登记未结清账单用真实金额，未登记的按最近一个完整账单周期消费估算；贷款、周期记账、有到期日的借入借出都按计划日期计入。")
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("资金计划")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -46,6 +46,7 @@ struct AccountEditView: View {
                                 bankId: bankId,
                                 fallbackEmoji: account?.iconEmoji ?? "💳",
                                 fallbackColorHex: account?.colorHex ?? "5B7C99",
+                                accountType: type,
                                 size: 36
                             )
                             Text(selectedBank?.name ?? "选择银行或平台")

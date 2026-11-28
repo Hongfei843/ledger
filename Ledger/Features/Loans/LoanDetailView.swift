@@ -116,6 +116,7 @@ struct LoanDetailView: View {
                 .disabled(unpaidItems.isEmpty)
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle(loan.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showPrepay) {

@@ -58,6 +58,7 @@ struct CategoryManageView: View {
                 }
             }
         }
+        .ledgerTabBarClearance()
         .navigationTitle("分类管理")
         .navigationBarTitleDisplayMode(.inline)
         .task {
