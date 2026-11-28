@@ -64,7 +64,7 @@ struct LedgerFloatingTabBar: View {
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.055), lineWidth: 0.5)
         )
-        .shadow(color: .black.opacity(0.10), radius: 22, x: 0, y: 10)
+        .shadow(color: .black.opacity(0.06), radius: 18, x: 0, y: 8)
         .padding(.horizontal, Theme.Spacing.m)
         .padding(.bottom, 4)
     }

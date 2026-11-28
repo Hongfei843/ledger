@@ -267,6 +267,8 @@ struct TransactionListView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.bottom, Theme.Layout.tabBarHeight)
+            // 空状态没有 List 提供底色，这里显式铺页面底色，深色下才不会露出系统黑底形成色块。
+            .background(Theme.pageBackground)
         } else {
             transactionList
         }
