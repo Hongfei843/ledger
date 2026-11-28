@@ -34,11 +34,16 @@ struct MonthlyReport {
     let previousIncomeMinor: Int64
     let previousExpenseMinor: Int64
     let categories: [MonthlyReportCategory]
+    /// 分类合计与本月支出的差额：负数表示有退款已冲减支出、但该分类本月已被冲成 0，无法展示。
+    /// 不变式：分类合计 + 该值 == 本月支出。
+    let refundOffsetMinor: Int64
     let topExpenses: [MonthlyReportItem]
     let days: [MonthlyReportDay]
 
     var netMinor: Int64 { incomeMinor - expenseMinor }
     var hasData: Bool { incomeMinor > 0 || expenseMinor > 0 }
+    /// 上月是否真的没有任何流水（用于区分「上月无数据」和「上月没有同类金额」）
+    var previousHasData: Bool { previousIncomeMinor > 0 || previousExpenseMinor > 0 }
 
     /// 环比（百分比，四舍五入）；上期没有数据时为 nil
     var expenseChangePercent: Int? { Self.change(current: expenseMinor, previous: previousExpenseMinor) }
@@ -89,11 +94,16 @@ enum MonthlyReportBuilder {
             buckets[originalCategory ?? unclassifiedId, default: 0] -= txn.amountMinor
         }
 
-        let ranked = buckets
+        // 占比分母取「毛支出合计」与「本月净支出」中的较大者：
+        // 正常两者相等（合计 100%）；退款把某分类冲成负数时，不会出现 300% 这种占比。
+        let positiveTotal = buckets.values.filter { $0 > 0 }.reduce(Int64(0)) { $0 + $1 }
+        let shareBase = max(totals.expense, positiveTotal)
+
+        let rankedAll = buckets
             .map { id, amount -> MonthlyReportCategory in
                 let category = categoryById[id]
                 let displayAmount = max(0, amount)
-                let share = totals.expense > 0 ? Double(displayAmount) / Double(totals.expense) : 0
+                let share = shareBase > 0 ? Double(displayAmount) / Double(shareBase) : 0
                 return MonthlyReportCategory(
                     id: id,
                     name: category?.name ?? "未分类",
@@ -105,8 +115,9 @@ enum MonthlyReportBuilder {
             }
             .filter { $0.amountMinor > 0 }
             .sorted { $0.amountMinor > $1.amountMinor }
-            .prefix(8)
-            .map { $0 }
+
+        let rankedSum = rankedAll.reduce(Int64(0)) { $0 + $1.amountMinor }
+        let ranked = Array(rankedAll.prefix(8))
 
         let topExpenses = inMonth
             .filter { $0.type == .expense && $0.source != .reimbursement }
@@ -160,6 +171,7 @@ enum MonthlyReportBuilder {
             previousIncomeMinor: previousTotals.income,
             previousExpenseMinor: previousTotals.expense,
             categories: ranked,
+            refundOffsetMinor: totals.expense - rankedSum,
             topExpenses: topExpenses,
             days: days
         )

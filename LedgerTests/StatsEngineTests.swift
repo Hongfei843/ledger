@@ -182,4 +182,92 @@ final class StatsEngineTests: XCTestCase {
         XCTAssertEqual(buckets.count, 1)
         XCTAssertEqual(buckets[0].expenseMinor, 1_000)
     }
+
+    /// 次月才发生的退款，不能倒回来改写本月「待报销」
+    func testPendingNotReducedByRefundInLaterMonth() {
+        let claim = makeDraftClaim()
+        let original = Txn(bookId: bookId, type: .expense, amountMinor: 5_000, accountId: accountId)
+        original.isReimbursable = true
+        original.claimId = claim.id
+
+        let nextMonth = AppCalendar.startOfNextMonth(Date())
+        let refund = Txn(bookId: bookId, type: .income, amountMinor: 2_000, accountId: accountId, occurredAt: nextMonth.addingTimeInterval(86_400))
+        refund.refundOfTxnId = original.id
+
+        let summary = StatsEngine.summary(
+            range: currentRange(),
+            caliber: .personal,
+            txns: [original, refund],
+            claims: [claim]
+        )
+        XCTAssertEqual(summary.pendingMinor, 5_000)
+    }
+
+    /// 跨月退款：分类合计 + 差额必须等于主卡净支出，不能凭空消失
+    func testCrossMonthRefundKeepsBreakdownConsistent() {
+        let food = Category(bookId: bookId, name: "餐饮", kind: .expense)
+        let traffic = Category(bookId: bookId, name: "交通", kind: .expense)
+        let lastMonth = AppCalendar.gregorian.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+        let lastMonthExpense = Txn(bookId: bookId, type: .expense, amountMinor: 5_000, accountId: accountId, occurredAt: lastMonth, categoryId: food.id)
+        let refund = Txn(bookId: bookId, type: .income, amountMinor: 2_000, accountId: accountId, categoryId: food.id)
+        refund.refundOfTxnId = lastMonthExpense.id
+        let thisExpense = Txn(bookId: bookId, type: .expense, amountMinor: 3_000, accountId: accountId, categoryId: traffic.id)
+
+        let txns = [lastMonthExpense, refund, thisExpense]
+        let summary = StatsEngine.summary(range: currentRange(), caliber: .cashFlow, txns: txns, claims: [])
+        let breakdown = StatsEngine.breakdown(
+            range: currentRange(),
+            caliber: .cashFlow,
+            txns: txns,
+            claims: [],
+            categories: [food, traffic]
+        )
+
+        XCTAssertEqual(summary.expenseMinor, 1_000)
+        XCTAssertEqual(breakdown.slices.count, 1)
+        XCTAssertEqual(breakdown.slices.first?.name, "交通")
+        XCTAssertEqual(breakdown.slices.first?.amountMinor, 3_000)
+        XCTAssertEqual(breakdown.refundOffsetMinor, -2_000)
+        XCTAssertEqual(breakdown.sliceTotalMinor + breakdown.refundOffsetMinor, summary.expenseMinor)
+    }
+
+    /// 垫付口径：退款要同时冲减「垫付」和「待报销」，两者不能互相矛盾
+    func testAdvanceCaliberNetsRefund() {
+        let claim = makeDraftClaim()
+        let original = Txn(bookId: bookId, type: .expense, amountMinor: 5_000, accountId: accountId)
+        original.isReimbursable = true
+        original.claimId = claim.id
+        let refund = Txn(bookId: bookId, type: .income, amountMinor: 2_000, accountId: accountId)
+        refund.refundOfTxnId = original.id
+
+        let advance = StatsEngine.summary(
+            range: currentRange(),
+            caliber: .advance,
+            txns: [original, refund],
+            claims: [claim]
+        )
+        XCTAssertEqual(advance.expenseMinor, 3_000)
+        XCTAssertEqual(advance.pendingMinor, 3_000)
+        XCTAssertEqual(advance.expenseMinor, advance.pendingMinor)
+    }
+
+    /// 退款冲减「原支出」的分类，而不是退款流水自己的分类
+    func testRefundUsesOriginalCategory() {        let food = Category(bookId: bookId, name: "餐饮", kind: .expense)
+        let traffic = Category(bookId: bookId, name: "交通", kind: .expense)
+        let original = Txn(bookId: bookId, type: .expense, amountMinor: 5_000, accountId: accountId, categoryId: food.id)
+        let refund = Txn(bookId: bookId, type: .income, amountMinor: 2_000, accountId: accountId, categoryId: traffic.id)
+        refund.refundOfTxnId = original.id
+
+        let breakdown = StatsEngine.breakdown(
+            range: currentRange(),
+            caliber: .cashFlow,
+            txns: [original, refund],
+            claims: [],
+            categories: [food, traffic]
+        )
+        XCTAssertEqual(breakdown.slices.count, 1)
+        XCTAssertEqual(breakdown.slices.first?.name, "餐饮")
+        XCTAssertEqual(breakdown.slices.first?.amountMinor, 3_000)
+        XCTAssertEqual(breakdown.refundOffsetMinor, 0)
+    }
 }

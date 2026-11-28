@@ -29,6 +29,9 @@ enum InsightEngine {
         let thisStart = AppCalendar.startOfMonth(monthAnchor)
         let nextStart = AppCalendar.startOfNextMonth(monthAnchor)
         let thisRange = DateInterval(start: thisStart, end: nextStart)
+        // 回看历史月份时，「近 90 天」「超过 45 天」都应以该月月末为基准，
+        // 否则 5 月的报告会用今天的数据算均值、算超期。
+        let referenceDate = min(Date(), thisRange.end.addingTimeInterval(-0.001))
 
         guard let prevStart = calendar.date(byAdding: .month, value: -1, to: thisStart) else { return [] }
         let prevRange = DateInterval(start: prevStart, end: thisStart)
@@ -62,9 +65,9 @@ enum InsightEngine {
             )
         }
 
-        // 2. 单笔异常：超过该分类近 90 天单笔均值的 3 倍
-        let recentStart = calendar.date(byAdding: .day, value: -90, to: Date()) ?? Date()
-        let recent = live.filter { $0.occurredAt >= recentStart && $0.type == .expense && $0.source != .reimbursement }
+        // 2. 单笔异常：超过该分类前 90 天单笔均值的 3 倍
+        let recentStart = calendar.date(byAdding: .day, value: -90, to: referenceDate) ?? referenceDate
+        let recent = live.filter { $0.occurredAt >= recentStart && $0.occurredAt < referenceDate && $0.type == .expense && $0.source != .reimbursement }
 
         var categoryAverage: [UUID: Int64] = [:]
         var categoryCount: [UUID: Int] = [:]
@@ -97,20 +100,33 @@ enum InsightEngine {
             )
         }
 
-        // 3. 订阅识别：同一备注在 3 个以上不同月份出现
-        var monthsByNote: [String: Set<String>] = [:]
-        for txn in live where txn.type == .expense && txn.source != .reimbursement {
-            guard let note = txn.note, note.count >= 2 else { continue }
-            monthsByNote[note, default: []].insert(AppCalendar.monthKey(txn.occurredAt))
+        // 3. 订阅识别：同一备注在 3 个以上不同月份出现，且金额稳定、频率接近每月一次。
+        //    只按「同备注」判断会把「午饭」「打车」这类日常备注误报成订阅。
+        var noteMonths: [String: Set<String>] = [:]
+        var noteAmounts: [String: [Int64]] = [:]
+        for txn in live where txn.type == .expense && txn.source != .reimbursement && txn.occurredAt < nextStart {
+            guard let rawNote = txn.note?.trimmingCharacters(in: .whitespacesAndNewlines), rawNote.count >= 2 else { continue }
+            noteMonths[rawNote, default: []].insert(AppCalendar.monthKey(txn.occurredAt))
+            noteAmounts[rawNote, default: []].append(txn.amountMinor)
         }
-        if let subscription = monthsByNote
-            .filter({ $0.value.count >= 3 })
-            .max(by: { $0.value.count < $1.value.count }) {
+        let subscription = noteMonths
+            .filter { element in
+                let key = element.key
+                guard element.value.count >= 3, let amounts = noteAmounts[key], !amounts.isEmpty else { return false }
+                guard let minAmount = amounts.min(), let maxAmount = amounts.max(), minAmount > 0 else { return false }
+                // 金额波动不超过 20%，且平均每月不超过 2 次，才像固定订阅
+                let stable = Double(maxAmount) / Double(minAmount) <= 1.2
+                let frequency = Double(amounts.count) / Double(element.value.count) <= 2
+                return stable && frequency
+            }
+            .max { $0.value.count < $1.value.count }
+        if let subscription {
+            let months = subscription.value.count
             results.append(
                 Insight(
                     id: "subscription-\(subscription.key)",
                     title: "可能是固定订阅：\(subscription.key)",
-                    detail: "已连续 \(subscription.value.count) 个月出现，可考虑是否还需要",
+                    detail: "已连续 \(months) 个月出现，金额基本不变，可考虑是否还需要",
                     symbol: "arrow.triangle.2.circlepath",
                     level: .info
                 )
@@ -118,10 +134,10 @@ enum InsightEngine {
         }
 
         // 4. 待报销超期
-        let threshold = calendar.date(byAdding: .day, value: -45, to: Date()) ?? Date()
+        let threshold = calendar.date(byAdding: .day, value: -45, to: referenceDate) ?? referenceDate
         let overdue = live.filter { txn in
             guard txn.type == .expense, txn.isReimbursable, txn.occurredAt < threshold else { return false }
-            guard let claimId = txn.claimId, let claim = claims.first(where: { $0.id == claimId }) else { return true }
+            guard let claimId = txn.claimId, let claim = claims.first(where: { $0.id == claimId && $0.deletedAt == nil }) else { return true }
             return claim.status == .draft
         }
         if !overdue.isEmpty {
@@ -180,7 +196,11 @@ enum InsightEngine {
             result[categoryId, default: 0] += txn.amountMinor
         }
         for txn in txns where RefundService.isRefund(txn) && range.contains(txn.occurredAt) {
-            guard let categoryId = txn.categoryId else { continue }
+            // 与统计页一致：退款冲减「原支出」的分类，而不是退款流水自己后来改过的分类
+            let originalCategory = txn.refundOfTxnId.flatMap { id in
+                txns.first(where: { $0.id == id && $0.deletedAt == nil })?.categoryId
+            }
+            guard let categoryId = originalCategory ?? txn.categoryId else { continue }
             result[categoryId, default: 0] -= txn.amountMinor
         }
         return result

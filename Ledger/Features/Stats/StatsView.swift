@@ -13,7 +13,7 @@ struct StatsView: View {
 
     private func bookMatches(_ id: UUID) -> Bool { BookScope.matches(id, raw: currentBookRaw) }
     private var liveTxns: [Txn] { allTxns.filter { $0.deletedAt == nil && bookMatches($0.bookId) } }
-    private var liveClaims: [Claim] { claims.filter { bookMatches($0.bookId) } }
+    private var liveClaims: [Claim] { claims.filter { $0.deletedAt == nil && bookMatches($0.bookId) } }
     private var scopedCategories: [Category] { categories.filter { bookMatches($0.bookId) } }
     private var interval: DateInterval { AppCalendar.monthInterval(containing: monthAnchor) }
 
@@ -21,8 +21,8 @@ struct StatsView: View {
         StatsEngine.summary(range: interval, caliber: caliber, txns: liveTxns, claims: liveClaims)
     }
 
-    private var slices: [CategorySlice] {
-        StatsEngine.byCategory(
+    private var breakdown: CategoryBreakdown {
+        StatsEngine.breakdown(
             range: interval,
             caliber: caliber,
             txns: liveTxns,
@@ -31,13 +31,19 @@ struct StatsView: View {
         )
     }
 
+    private var slices: [CategorySlice] { breakdown.slices }
+
     private var buckets: [MonthBucket] {
         StatsEngine.byMonth(months: 6, endingAt: monthAnchor, txns: liveTxns, claims: liveClaims, caliber: caliber)
     }
 
-    private var totalExpense: Int64 {
-        slices.reduce(Int64(0)) { $0 + $1.amountMinor }
-    }
+    /// 主卡净支出是唯一口径：环形图、排行、下钻都按它算占比；
+    /// 未能落到分类上的退款冲减由 `breakdown.refundOffsetMinor` 单列说明。
+    private var totalExpense: Int64 { summary.expenseMinor }
+
+    /// 占比分母：正常等于净支出；当退款把某个分类冲成负数（分类合计反而大于净支出）时，
+    /// 改用分类合计做分母，保证占比不会出现 300% 这种结果。
+    private var percentBase: Int64 { max(totalExpense, breakdown.sliceTotalMinor) }
 
     /// 环形图最多画 8 块，其余合并为「其他 N 类」，保证图上占比合计与圆心总额一致。
     private var chartSlices: [CategorySlice] {
@@ -101,10 +107,16 @@ struct StatsView: View {
                     .frame(width: 34, height: 34)
                     .background(Theme.subtleBackground, in: Circle())
             }
+            .disabled(isCurrentMonth)
+            .opacity(isCurrentMonth ? 0.35 : 1)
         }
         .buttonStyle(.plain)
         .padding(.horizontal, Theme.Spacing.xs)
         .padding(.top, Theme.Spacing.s)
+    }
+
+    private var isCurrentMonth: Bool {
+        AppCalendar.gregorian.isDate(monthAnchor, equalTo: Date(), toGranularity: .month)
     }
 
     private var caliberPicker: some View {
@@ -122,13 +134,15 @@ struct StatsView: View {
                 .foregroundStyle(Theme.accent)
             VStack(alignment: .leading, spacing: 4) {
                 Text(caliberDescription)
-                if caliber == .personal && summary.pendingMinor == 0 && summary.expenseMinor > 0 {
-                    Text("本月没有待报销记录，所以这个口径与「现金流」结果相同。")
-                        .foregroundStyle(.secondary)
-                }
                 if caliber == .personal && summary.pendingMinor > 0 {
                     Text("已剔除待报销 \(Money.format(summary.pendingMinor))")
                         .foregroundStyle(Theme.warning)
+                } else if caliber == .personal && summary.expenseMinor > 0 && summary.expenseMinor == cashFlowExpense {
+                    Text("本月没有待报销记录，所以这个口径与「现金流」结果相同。")
+                        .foregroundStyle(.secondary)
+                } else if caliber == .personal && summary.expenseMinor != cashFlowExpense {
+                    Text("本月有已报销的垫付或报销差额，个人消费已按报销结果调整。")
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -136,6 +150,10 @@ struct StatsView: View {
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Theme.Spacing.xs)
+    }
+
+    private var cashFlowExpense: Int64 {
+        StatsEngine.summary(range: interval, caliber: .cashFlow, txns: liveTxns, claims: liveClaims).expenseMinor
     }
 
     private var caliberDescription: String {
@@ -222,7 +240,7 @@ struct StatsView: View {
         Group {
             if !insights.isEmpty {
                 VStack(alignment: .leading, spacing: Theme.Spacing.s) {
-                    LedgerSectionHeader(title: "现金流洞察")
+                    LedgerSectionHeader(title: "现金流洞察", detail: "固定按现金流口径")
 
                     ForEach(insights) { insight in
                         HStack(alignment: .top, spacing: Theme.Spacing.s) {
@@ -283,7 +301,7 @@ struct StatsView: View {
                     )
                     .foregroundStyle(categoryColor(for: slice))
                     .annotation(position: .overlay) {
-                        let ratio = totalExpense > 0 ? Double(slice.amountMinor) / Double(totalExpense) : 0
+                        let ratio = percentBase > 0 ? Double(slice.amountMinor) / Double(percentBase) : 0
                         if ratio >= 0.08 {
                             Text(String(format: "%.0f%%", ratio * 100))
                                 .font(.caption2.weight(.semibold))
@@ -302,6 +320,18 @@ struct StatsView: View {
                 }
 
                 legendGrid
+
+                if breakdown.refundOffsetMinor < 0 {
+                    Text("另有退款冲减 \(Money.format(-breakdown.refundOffsetMinor))，未分摊到具体分类；上方合计已扣除。")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if breakdown.refundOffsetMinor > 0 {
+                    Text("另有 \(Money.format(breakdown.refundOffsetMinor)) 支出未归入分类；上方合计已包含。")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
         .padding(Theme.Spacing.l)
@@ -337,8 +367,8 @@ struct StatsView: View {
     }
 
     private func percent(of slice: CategorySlice) -> Double {
-        guard totalExpense > 0 else { return 0 }
-        return Double(slice.amountMinor) / Double(totalExpense) * 100
+        guard percentBase > 0 else { return 0 }
+        return Double(slice.amountMinor) / Double(percentBase) * 100
     }
 
     private var rankSection: some View {
@@ -365,7 +395,7 @@ struct StatsView: View {
     }
 
     private func rankRow(_ slice: CategorySlice, color: Color) -> some View {
-        let ratio = totalExpense > 0 ? Double(slice.amountMinor) / Double(totalExpense) : 0
+        let ratio = percentBase > 0 ? Double(slice.amountMinor) / Double(percentBase) : 0
         return HStack(spacing: Theme.Spacing.m) {
             CategoryIconView(emoji: slice.emoji, name: slice.name, colorHex: slice.colorHex, size: 28)
                 .overlay(alignment: .bottomTrailing) {
@@ -408,7 +438,7 @@ struct StatsView: View {
 
             Chart(buckets) { bucket in
                 BarMark(
-                    x: .value("月份", String(bucket.id.suffix(2)) + "月"),
+                    x: .value("月份", monthLabel(bucket.monthStart)),
                     y: .value("支出", Double(bucket.expenseMinor) / 100.0)
                 )
                 .foregroundStyle(Theme.accent.gradient)
@@ -433,6 +463,12 @@ struct StatsView: View {
     private var monthTitle: String {
         let comps = AppCalendar.gregorian.dateComponents([.year, .month], from: monthAnchor)
         return "\(comps.year ?? 0)年\(comps.month ?? 0)月"
+    }
+
+    /// 趋势图横轴标签去掉前导零（"01月" → "1月"）
+    private func monthLabel(_ date: Date) -> String {
+        let comps = AppCalendar.gregorian.dateComponents([.month], from: date)
+        return "\(comps.month ?? 1)月"
     }
 
     private func shiftMonth(_ delta: Int) {

@@ -104,6 +104,42 @@ final class MonthlyReportTests: XCTestCase {
         XCTAssertEqual(report.days.count, 30)
     }
 
+    /// 跨月退款：分类合计 + 差额必须等于本月支出
+    func testCrossMonthRefundKeepsCategorySumConsistent() {
+        let food = makeCategory("餐饮")
+        let traffic = makeCategory("交通")
+        let month = date(2026, 3, 15)
+        let lastMonthExpense = makeTxn(type: .expense, amount: 5_000, day: date(2026, 2, 10), categoryId: food.id)
+        let refund = makeTxn(type: .income, amount: 2_000, day: on(6), categoryId: food.id, refundOf: lastMonthExpense.id)
+        let thisExpense = makeTxn(type: .expense, amount: 3_000, day: on(7), categoryId: traffic.id)
+
+        let report = MonthlyReportBuilder.build(
+            monthAnchor: month,
+            txns: [lastMonthExpense, refund, thisExpense],
+            categories: [food, traffic]
+        )
+
+        XCTAssertEqual(report.expenseMinor, 1_000)
+        XCTAssertEqual(report.categories.map { $0.name }, ["交通"])
+        XCTAssertEqual(report.categories.first?.amountMinor, 3_000)
+        XCTAssertEqual(report.refundOffsetMinor, -2_000)
+        XCTAssertEqual(report.categories.reduce(Int64(0)) { $0 + $1.amountMinor } + report.refundOffsetMinor, report.expenseMinor)
+    }
+
+    /// 上月只有收入、没有支出时，不能笼统写「上月无数据」
+    func testPreviousHasDataWhenOnlyIncome() {
+        let month = date(2026, 3, 15)
+        let txns = [
+            makeTxn(type: .income, amount: 10_000, day: date(2026, 2, 10)),
+            makeTxn(type: .expense, amount: 3_000, day: on(2))
+        ]
+
+        let report = MonthlyReportBuilder.build(monthAnchor: month, txns: txns, categories: [])
+        XCTAssertTrue(report.previousHasData)
+        XCTAssertNil(report.expenseChangePercent)
+        XCTAssertEqual(report.incomeChangePercent, -100)
+    }
+
     private func on(_ day: Int) -> Date {
         date(2026, 3, day)
     }

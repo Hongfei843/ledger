@@ -80,8 +80,8 @@ struct MonthlyReportView: View {
     private func summaryCard(_ report: MonthlyReport) -> some View {
         VStack(spacing: Theme.Spacing.m) {
             HStack(spacing: Theme.Spacing.m) {
-                summaryTile(title: "收入", amount: report.incomeMinor, color: Theme.income, change: report.incomeChangePercent)
-                summaryTile(title: "支出", amount: report.expenseMinor, color: .primary, change: report.expenseChangePercent)
+                summaryTile(title: "收入", amount: report.incomeMinor, color: Theme.income, change: report.incomeChangePercent, previousHasData: report.previousHasData)
+                summaryTile(title: "支出", amount: report.expenseMinor, color: .primary, change: report.expenseChangePercent, previousHasData: report.previousHasData)
             }
             HStack {
                 Text("结余")
@@ -103,11 +103,15 @@ struct MonthlyReportView: View {
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
+            Text("按现金流口径统计：含待报销垫付，与统计页「个人消费」可能不同")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .cardStyle()
     }
 
-    private func summaryTile(title: String, amount: Int64, color: Color, change: Int?) -> some View {
+    private func summaryTile(title: String, amount: Int64, color: Color, change: Int?, previousHasData: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption2)
@@ -123,7 +127,7 @@ struct MonthlyReportView: View {
                     .font(.caption2)
                     .foregroundStyle(change >= 0 ? Theme.income : Theme.danger)
             } else {
-                Text("上月无数据")
+                Text(previousHasData ? "上月无同类数据" : "上月无数据")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -175,6 +179,12 @@ struct MonthlyReportView: View {
                     }
                 }
                 .padding(.vertical, 3)
+            }
+            if report.refundOffsetMinor < 0 {
+                Text("另有退款冲减 \(Money.format(-report.refundOffsetMinor)) 未分摊到分类，支出已按净额计算")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
             }
         }
         .padding(Theme.Spacing.m)

@@ -45,6 +45,17 @@ struct MonthBucket: Identifiable {
     let expenseMinor: Int64
 }
 
+/// 分类构成 + 与主卡净支出的差额。
+/// 不变式：`slices` 合计 + `refundOffsetMinor` == 当期净支出（`StatsSummary.expenseMinor`）。
+struct CategoryBreakdown {
+    let slices: [CategorySlice]
+    /// 负数表示有退款已冲减主卡、但冲减后该分类为负，无法落到具体分类上。
+    /// 正数表示有支出因分类缺失未能归入（正常应为 0）。
+    let refundOffsetMinor: Int64
+
+    var sliceTotalMinor: Int64 { slices.reduce(Int64(0)) { $0 + $1.amountMinor } }
+}
+
 /// 统计引擎：所有口径由同一个入口按参数切换，不写多套查询。
 enum StatsEngine {
     /// 未分类聚合用的稳定 id，保证视图 diff 稳定
@@ -140,9 +151,9 @@ enum StatsEngine {
             }
         }
 
-        // 待报销金额是独立净额概念：三种口径都必须扣除已发生的退款，
-        // 否则统计页切换口径时同一笔垫付显示不同金额。
-        for txn in txns where txn.deletedAt == nil && RefundService.isRefund(txn) {
+        // 待报销金额是「当期时点」的净额概念：只扣当期已发生的退款。
+        // 次月才退的款不能倒回去改写上月仍待报销的金额。
+        for txn in txns where txn.deletedAt == nil && range.contains(txn.occurredAt) && RefundService.isRefund(txn) {
             guard let originalId = txn.refundOfTxnId,
                   let original = txns.first(where: { $0.id == originalId && $0.deletedAt == nil }),
                   range.contains(original.occurredAt),
@@ -154,9 +165,8 @@ enum StatsEngine {
         pending = max(0, pending)
 
         // 退款是否冲减取决于原支出是否属于当前口径，跨期退款仍在到账月冲减。
-        if caliber != .advance {
-            expense = RefundService.netExpense(expenseMinor: expense, refundMinor: refunded)
-        }
+        // 垫付口径也要扣：被退掉的那部分不再需要报销，否则主卡「垫付」与「待报销」会互相矛盾。
+        expense = RefundService.netExpense(expenseMinor: expense, refundMinor: refunded)
 
         return StatsSummary(incomeMinor: income, expenseMinor: expense, pendingMinor: pending)
     }
@@ -168,68 +178,89 @@ enum StatsEngine {
         claims: [Claim],
         categories: [Category]
     ) -> [CategorySlice] {
+        breakdown(range: range, caliber: caliber, txns: txns, claims: claims, categories: categories).slices
+    }
+
+    /// 分类构成。退款一律冲减「原支出」的分类（原支出不在本期时，冲减额进差额，不凭空消失）；
+    /// 分类合计 + 差额 恒等于主卡净支出，避免环形图、排行、下钻三处各算一套。
+    static func breakdown(
+        range: DateInterval,
+        caliber: StatsCaliber,
+        txns: [Txn],
+        claims: [Claim],
+        categories: [Category]
+    ) -> CategoryBreakdown {
         let open = openClaimIds(claims: claims)
         let claimsById = Dictionary(uniqueKeysWithValues: claims.map { ($0.id, $0) })
-        var totals: [UUID: (amount: Int64, count: Int)] = [:]
-        var unknownAmount: Int64 = 0
-        var unknownCount = 0
+        let knownCategoryIds = Set(categories.map { $0.id })
+
+        func originalCategoryId(of refund: Txn) -> UUID {
+            if let originalId = refund.refundOfTxnId,
+               let original = txns.first(where: { $0.id == originalId && $0.deletedAt == nil }) {
+                return original.categoryId ?? uncategorizedId
+            }
+            return refund.categoryId ?? uncategorizedId
+        }
+
+        var buckets: [UUID: (amount: Int64, count: Int)] = [:]
+        var gross: Int64 = 0
+        var refunded: Int64 = 0
 
         for txn in txns where txn.deletedAt == nil && range.contains(txn.occurredAt) {
             guard includesExpense(txn, caliber: caliber, openClaims: open, claimsById: claimsById) else { continue }
-            if let categoryId = txn.categoryId {
-                let current = totals[categoryId] ?? (0, 0)
-                totals[categoryId] = (current.amount + txn.amountMinor, current.count + 1)
-            } else {
-                unknownAmount += txn.amountMinor
-                unknownCount += 1
-            }
+            let key = txn.categoryId ?? uncategorizedId
+            let current = buckets[key] ?? (amount: 0, count: 0)
+            buckets[key] = (current.amount + txn.amountMinor, current.count + 1)
+            gross += txn.amountMinor
         }
 
-        // 退款冲减「原支出」的分类。退款流水可能被编辑过分类，直接读退款自身 categoryId
-        // 会让统计页和月报对同一笔退款冲到不同分类。
-        if caliber != .advance {
-            for txn in txns where txn.deletedAt == nil && range.contains(txn.occurredAt) && includesRefund(txn, caliber: caliber, allTxns: txns, openClaims: open, claimsById: claimsById) {
-                let originalId = txn.refundOfTxnId
-                let categoryId = originalId.flatMap { id in
-                    txns.first(where: { $0.id == id && $0.deletedAt == nil })?.categoryId
-                } ?? txn.categoryId
-                if let categoryId, let current = totals[categoryId] {
-                    totals[categoryId] = (current.amount - txn.amountMinor, current.count)
-                } else {
-                    unknownAmount -= txn.amountMinor
-                }
-            }
+        for txn in txns where txn.deletedAt == nil && range.contains(txn.occurredAt)
+            && includesRefund(txn, caliber: caliber, allTxns: txns, openClaims: open, claimsById: claimsById) {
+            let key = originalCategoryId(of: txn)
+            let current = buckets[key] ?? (amount: 0, count: 0)
+            buckets[key] = (current.amount - txn.amountMinor, current.count)
+            refunded += txn.amountMinor
+        }
+
+        // 分类缺失（被归档/删除）的金额并入「未分类」，保证不丢钱。
+        var merged: [UUID: (amount: Int64, count: Int)] = [:]
+        for (key, value) in buckets {
+            let displayId = knownCategoryIds.contains(key) ? key : uncategorizedId
+            let current = merged[displayId] ?? (amount: 0, count: 0)
+            merged[displayId] = (current.amount + value.amount, current.count + value.count)
         }
 
         var slices: [CategorySlice] = []
-        for (categoryId, value) in totals {
-            guard value.amount > 0, let category = categories.first(where: { $0.id == categoryId }) else { continue }
-            slices.append(
-                CategorySlice(
-                    id: categoryId,
-                    name: category.name,
-                    emoji: category.iconEmoji,
-                    colorHex: category.colorHex,
-                    amountMinor: value.amount,
-                    count: value.count
+        for (categoryId, value) in merged where value.amount > 0 {
+            if categoryId == uncategorizedId {
+                slices.append(
+                    CategorySlice(
+                        id: uncategorizedId,
+                        name: "未分类",
+                        emoji: "❓",
+                        colorHex: "999999",
+                        amountMinor: value.amount,
+                        count: max(0, value.count)
+                    )
                 )
-            )
-        }
-
-        if unknownCount > 0, unknownAmount > 0 {
-            slices.append(
-                CategorySlice(
-                    id: uncategorizedId,
-                    name: "未分类",
-                    emoji: "❓",
-                    colorHex: "999999",
-                    amountMinor: unknownAmount,
-                    count: unknownCount
+            } else if let category = categories.first(where: { $0.id == categoryId }) {
+                slices.append(
+                    CategorySlice(
+                        id: categoryId,
+                        name: category.name,
+                        emoji: category.iconEmoji,
+                        colorHex: category.colorHex,
+                        amountMinor: value.amount,
+                        count: max(0, value.count)
+                    )
                 )
-            )
+            }
         }
+        slices.sort { $0.amountMinor > $1.amountMinor }
 
-        return slices.sorted { $0.amountMinor > $1.amountMinor }
+        let net = RefundService.netExpense(expenseMinor: gross, refundMinor: refunded)
+        let sliceTotal = slices.reduce(Int64(0)) { $0 + $1.amountMinor }
+        return CategoryBreakdown(slices: slices, refundOffsetMinor: net - sliceTotal)
     }
 
     /// 最近 N 个月的收支趋势，与当前统计页选择的口径保持一致。

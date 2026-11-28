@@ -73,6 +73,74 @@ final class InsightEngineTests: XCTestCase {
         XCTAssertTrue(insights.contains { $0.id.hasPrefix("subscription") })
     }
 
+    /// 同一备注连续三个月出现，但金额波动大、频率高 → 不应判成订阅
+    func testEverydayNoteIsNotSubscription() {
+        let food = Category(bookId: bookId, name: "餐饮", kind: .expense)
+        let amounts: [Int64] = [1_200, 3_800, 2_500]
+        var txns: [Txn] = []
+        for (offset, amount) in amounts.enumerated() {
+            let txn = Txn(
+                bookId: bookId,
+                type: .expense,
+                amountMinor: amount,
+                accountId: accountId,
+                occurredAt: monthOffset(-offset),
+                categoryId: food.id,
+                note: "午饭"
+            )
+            txns.append(txn)
+        }
+
+        let insights = InsightEngine.generate(
+            monthAnchor: Date(),
+            txns: txns,
+            categories: [food],
+            claims: []
+        )
+        XCTAssertFalse(insights.contains { $0.id.hasPrefix("subscription") })
+    }
+
+    /// 历史月份洞察只看该月及之前的数据，不把之后的流水带进来
+    func testInsightUsesMonthAnchorAsWindowEnd() {
+        let service = Category(bookId: bookId, name: "订阅服务", kind: .expense)
+        let pastMonth = AppCalendar.gregorian.date(byAdding: .month, value: -6, to: Date()) ?? Date()
+        let calendar = AppCalendar.gregorian
+
+        var txns: [Txn] = []
+        for offset in 0...2 {
+            guard let day = calendar.date(byAdding: .month, value: offset, to: pastMonth) else { continue }
+            txns.append(
+                Txn(
+                    bookId: bookId,
+                    type: .expense,
+                    amountMinor: 2_500,
+                    accountId: accountId,
+                    occurredAt: day,
+                    categoryId: service.id,
+                    note: "某会员"
+                )
+            )
+        }
+
+        let insights = InsightEngine.generate(
+            monthAnchor: pastMonth,
+            txns: txns,
+            categories: [service],
+            claims: []
+        )
+        // 回看 -6 月时，-5、-4 月还没发生，不构成「连续 3 个月订阅」
+        XCTAssertFalse(insights.contains { $0.id.hasPrefix("subscription") })
+
+        // 看最新一个月时，三个月都在范围内，才应识别
+        let latest = InsightEngine.generate(
+            monthAnchor: Date(),
+            txns: txns,
+            categories: [service],
+            claims: []
+        )
+        XCTAssertTrue(latest.contains { $0.id.hasPrefix("subscription") })
+    }
+
     /// 没有数据时不应产出任何洞察（避免空话）
     func testNoDataNoInsight() {
         let insights = InsightEngine.generate(monthAnchor: Date(), txns: [], categories: [], claims: [])

@@ -16,9 +16,21 @@ struct CategoryTxnListView: View {
     private var openClaims: Set<UUID> { StatsEngine.openClaimIds(claims: claims) }
     private var claimsById: [UUID: Claim] { Dictionary(uniqueKeysWithValues: claims.map { ($0.id, $0) }) }
 
+    /// 退款归到「原支出」的分类，与统计页的分类构成保持同一归属。
+    private func displayCategoryId(_ txn: Txn) -> UUID {
+        if RefundService.isRefund(txn),
+           let originalId = txn.refundOfTxnId,
+           let original = allTxns.first(where: { $0.id == originalId && $0.deletedAt == nil }) {
+            return original.categoryId ?? StatsEngine.uncategorizedId
+        }
+        return txn.categoryId ?? StatsEngine.uncategorizedId
+    }
+
     private var items: [Txn] {
         allTxns.filter { txn in
-            guard txn.deletedAt == nil, txn.categoryId == categoryId, range.contains(txn.occurredAt) else { return false }
+            guard txn.deletedAt == nil,
+                  range.contains(txn.occurredAt),
+                  displayCategoryId(txn) == categoryId else { return false }
             return StatsEngine.includesExpense(txn, caliber: caliber, openClaims: openClaims, claimsById: claimsById)
                 || StatsEngine.includesRefund(txn, caliber: caliber, allTxns: allTxns, openClaims: openClaims, claimsById: claimsById)
         }
